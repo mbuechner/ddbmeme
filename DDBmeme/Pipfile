@@ -1,0 +1,11 @@
+[requires]
+
+python_version = "3.6"
+
+[packages]
+
+django = "~=2.1.5"
+django-crispy-forms = "~=1.7.2"
+django-compressor  = "~=2.2"
+python-dotenv = "~=0.10.1"
+flask-script = "~=2.0.6"
