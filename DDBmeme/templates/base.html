@@ -8,6 +8,7 @@
     <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous"> {% block stylesheet %}{% endblock %}
     <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.2.1/sketchy/bootstrap.min.css" rel="stylesheet" integrity="sha384-Yr9hLdz4zKsdMcB2IUf0I2Y+KFalEfJez2d0H2rgQoAYjvm/mzbm2egxZ9Gc9kkg" crossorigin="anonymous">
     <title>{% block title %}DDBmeme{% endblock %}</title>
+    <base href="{{ request.build_absolute_uri }}{% if request.META.HTTP_X_FORWARDED_PREFIX %}{{ request.META.HTTP_X_FORWARDED_PREFIX|slice:"1:" }}{% endif %}" />
 </head>
 
 <body>
