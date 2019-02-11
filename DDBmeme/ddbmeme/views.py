@@ -153,7 +153,7 @@ def makememeModel(request):
         url += '_/'
     if len(bottomtext) > 0:
         url += urllib.parse.quote_plus(bottomtext) + '/'
-    url = url[:-1] + '.png?font=impact&alt=' + urllib.parse.quote_plus(image_url)
+    url = url[:-1] + '.jpg?font=impact&alt=' + urllib.parse.quote_plus(image_url)
 
     response = StreamingHttpResponse(url2yield(url), content_type="image/png")
 
