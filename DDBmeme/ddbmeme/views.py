@@ -82,7 +82,10 @@ def maketextModel(request):
     image = request.GET.get('image', None)
 
     url = request.build_absolute_uri('/')
-    url += 'meme?alt='
+    if request.META.get('HTTP_X_FORWARDED_PREFIX'):
+       url = url[:-1] +  request.META.get('HTTP_X_FORWARDED_PREFIX') + '/meme?alt='
+    else:
+       url += 'meme?alt='
     url += urllib.parse.quote_plus(image)
     url += '&toptext='
     url += urllib.parse.quote_plus(toptext)
