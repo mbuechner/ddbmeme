@@ -30,7 +30,7 @@ def autocompleteModel(request):
     }
 
     if (query is None) or not (len(query) == 81) or not query.startswith('https://www.deutsche-digitale-bibliothek.de/item/'):
-        data['message'] = '<strong>Example?</strong> Try something like one: <a id="alert_example" href="#" class="alert-link" style="word-wrap:break-word;">https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4</a>'
+        data['message'] = '<strong>Example?</strong> Try something like this one: <a id="alert_example" href="#" class="alert-link" style="word-wrap:break-word;">https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4</a>'
         return JsonResponse(data)
 
     query = query.replace('www.', 'api.')
