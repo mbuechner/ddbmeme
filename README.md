@@ -27,7 +27,7 @@ Open browser: http://localhost:80/
 | DDB_API_KEY          | API key of Deutsche Digitale Bibliothek ([request](https://www.deutsche-digitale-bibliothek.de/user/apikey) and [documentation](https://api.deutsche-digitale-bibliothek.de/)) |
 | SECRET_KEY           | Any random character string, which should be kept secret.                                                                                                                       |
 | USE_X_FORWARDED_HOST | Set to 1 if you run DDBmeme behind a reverse proxy                                                                                                                             |
-| ALLOWED_HOSTS        | Set allowed hosts (e.g. `ddbmeme.example.org` or `localhost` if you only run it locally                                                                                        |
+| ALLOWED_HOSTS        | Set allowed hosts (e.g. `ddbmeme.example.org` or `localhost`, if you only run it locally)                                                                                      |
 
 ### Container build
 1. Checkout GitHub repository: `git clone https://github.com/mbuechner/ddbmeme`
