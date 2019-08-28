@@ -3,7 +3,7 @@ python_version = "3.7"
 
 [packages]
 Click = "==7.0"
-Django = "==2.2.1"
+Django = "==2.2.4"
 django-appconf = "==1.0.3"
 django-compressor = "==2.2"
 django-crispy-forms = "==1.7.2"
