@@ -27,7 +27,3 @@ jobs:
         pip install pipenv
         cd DDBmeme
         python -m pipenv install
-    - name: Run Tests
-      run: |
-        cd DDBmeme
-        python manage.py test
