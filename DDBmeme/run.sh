@@ -2,7 +2,7 @@
 
 # Start the memegen process
 cd /home/memegen
-pipenv run python3.7 manage.py runserver --host 127.0.0.1 --port 5000 &
+pipenv run python3 manage.py runserver --host 127.0.0.1 --port 5000 &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to start memegen process: $status"
@@ -11,7 +11,7 @@ fi
 
 # Start the DDBmeme process
 cd /home/DDBmeme
-pipenv run python3.7 manage.py runserver 0.0.0.0:80 &
+pipenv run python3 manage.py runserver 0.0.0.0:80 &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to start DDBmeme process: $status"
