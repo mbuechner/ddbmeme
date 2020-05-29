@@ -1,3 +1,4 @@
+![Django CI](https://github.com/mbuechner/ddbmeme/workflows/Django%20CI/badge.svg) ![Docker](https://github.com/mbuechner/ddbmeme/workflows/Docker/badge.svg)
 # DDBmeme: A meme generator for Deutsche Digitale Bibliothek
 
 DDBmeme is a [Internet meme](https://en.wikipedia.org/wiki/Internet_meme) generator, based on pictures of [Deutsche Digitale Bibliothek](https://www.deutsche-digitale-bibliothek.de), which is the central national portal for culture and science in Germany. All you need to know is the URL of an DDB object, like [https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4](https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4), put it in the generator and be creative. :bowtie:
