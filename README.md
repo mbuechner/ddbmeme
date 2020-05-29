@@ -5,7 +5,7 @@ DDBmeme is a [Internet meme](https://en.wikipedia.org/wiki/Internet_meme) genera
 *Try it yourself:* https://labs.ddb.de/app/ddbmeme and [find some good pictures at DDB](https://www.deutsche-digitale-bibliothek.de/searchresults?isThumbnailFiltered=true&query=Klaus+Kinski&viewType=grid&rows=1000&offset=0)! :eyes:
 
 ## Screenshot
-![Screenshot of DDBmeme](https://github.com/mbuechner/ddbmeme/blob/master/DDBmeme.png "DDBmeme")
+![Screenshot of DDBmeme](https://raw.githubusercontent.com/mbuechner/ddbmeme/master/DDBmeme.png "DDBmeme")
 
 ## Run with Docker
 DDBmeme is at Docker Hub: https://hub.docker.com/r/mbuechner/ddbmeme
