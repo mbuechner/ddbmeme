@@ -24,7 +24,9 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        cd DDBmeme && python -m pipenv install
+        pip install pipenv
+        cd DDBmeme
+        python -m pipenv install
     - name: Run Tests
       run: |
         python manage.py test
