@@ -146,14 +146,14 @@ def makememeModel(request):
         return
 
     # service could running locally under port 5000
-    url = 'http://localhost:5000/custom/'
+    url = 'http://localhost:5000/images/custom/'
     if len(toptext) > 0:
         url += urllib.parse.quote_plus(toptext) + '/'
     else:
         url += '_/'
     if len(bottomtext) > 0:
         url += urllib.parse.quote_plus(bottomtext) + '/'
-    url = url[:-1] + '.jpg?font=impact&alt=' + urllib.parse.quote_plus(image_url)
+    url = url[:-1] + '.jpg?background=' + urllib.parse.quote_plus(image_url)
 
     response = StreamingHttpResponse(url2yield(url), content_type="image/png")
 
