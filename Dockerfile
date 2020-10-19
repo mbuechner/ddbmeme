@@ -1,9 +1,9 @@
-FROM python:3-buster
+FROM python:3.9
 MAINTAINER Michael Büchner <m.buechner@dnb.de>
-RUN apt-get update && apt-get install -y python3-dev
+# RUN apt-get update && apt-get install -y python3-dev
 RUN git clone https://github.com/jacebrowning/memegen.git /home/memegen
 WORKDIR /home/memegen
-RUN python3 -m pip install pipenv
+RUN python3 -m pip install pipenv poetry
 RUN { \
 	echo "FLASK_ENV=production"; \
 	echo "GOOGLE_ANALYTICS_TID=local"; \
