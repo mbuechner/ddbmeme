@@ -2,7 +2,7 @@
 
 # Start the memegen process
 cd /home/memegen
-pipenv run python3 manage.py runserver --host 127.0.0.1 --port 5000 &
+make run &
 status=$?
 if [ $status -ne 0 ]; then
   echo "Failed to start memegen process: $status"
