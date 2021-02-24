@@ -22,7 +22,7 @@ fi
 while sleep 60; do
   ps aux |grep memegen |grep -v grep
   PROCESS_1_STATUS=$?
-  ps aux |grep DDBmem |grep -v grep
+  ps aux |grep DDBmeme |grep -v grep
   PROCESS_2_STATUS=$?
   if [ $PROCESS_1_STATUS -ne 0 -o $PROCESS_2_STATUS -ne 0 ]; then
     echo "One of the processes has already exited."
