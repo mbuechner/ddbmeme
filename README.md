@@ -13,14 +13,14 @@ DDBmeme is at Docker Hub: https://hub.docker.com/r/mbuechner/ddbmeme
 
 Pull & start Container with: 
 ```
-docker run -d -p 80:80 -P \
+docker run -d -p 8080:8080 -P \
   --env "DDB_API_KEY=abcdefghijklm...nopqrstuvwxyz" \
   --env "SECRET_KEY=myverysecretsecretkey" \
   --env "USE_X_FORWARDED_HOST=0" \
   --env "ALLOWED_HOSTS=127.0.0.1,localhost" \
 mbuechner/ddbmeme
 ```
-Open browser: http://localhost:80/
+Open browser: http://localhost:8080/
 
 ### Environment variables
 | Variable             | Description                                                                                                                                                                    |
@@ -36,14 +36,14 @@ Open browser: http://localhost:80/
 3. Run `docker build -t ddbmeme .`
 4. Start container:
 ```
-docker run -d -p 80:80 -P \
+docker run -d -p 8080:8080 -P \
   --env "DDB_API_KEY=abcdefghijklm...nopqrstuvwxyz" \
   --env "SECRET_KEY=myverysecretsecretkey" \
   --env "USE_X_FORWARDED_HOST=0" \
   --env "ALLOWED_HOSTS=127.0.0.1,localhost" \
 ddbmeme
 ```
-5. Open browser: http://localhost:80/
+5. Open browser: http://localhost:8080/
 
 ### Docker stack example
 ```
@@ -57,7 +57,7 @@ services:
       USE_X_FORWARDED_HOST: 0
       ALLOWED_HOSTS: 127.0.0.1,localhost
     ports:
-      - "80"
+      - "8080"
     restart: always
 ```
 
