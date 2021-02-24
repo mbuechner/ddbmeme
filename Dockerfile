@@ -1,20 +1,23 @@
 FROM python:3.9
 MAINTAINER Michael Büchner <m.buechner@dnb.de>
-# RUN apt-get update && apt-get install -y python3-dev
 RUN git clone https://github.com/jacebrowning/memegen.git /home/memegen
 WORKDIR /home/memegen
-RUN python3 -m pip install pipenv poetry
+# no tags, no versions, so we need to use commit hash :-(
+RUN git checkout e97e959
+RUN python3 -m pip install pipenv poetry uvicorn gunicorn uvloop
 RUN { \
-	echo "FLASK_ENV=production"; \
-	echo "GOOGLE_ANALYTICS_TID=local"; \
-	echo "#REGENERATE_IMAGES=true"; \
-	echo "WATERMARK_OPTIONS=DDBmeme"; \
+	echo "WEB_CONCURRENCY=2"; \
+	echo "MAX_REQUESTS=0"; \
+	echo "MAX_REQUESTS_JITTER=0"; \
+	echo "WATERMARK_OPTIONS=blank,DDBmeme"; \
 	} > .env
-RUN python3 -m pipenv install --ignore-pipfile
-RUN make install
+RUN pipenv install
+RUN pipenv run poetry install
+
 COPY DDBmeme/ /home/DDBmeme/
 WORKDIR /home/DDBmeme
-RUN python3 -m pipenv install --ignore-pipfile
-CMD ["/home/DDBmeme/run.sh"]
-EXPOSE 80
+RUN pipenv install --ignore-pipfile
 
+CMD ["/home/DDBmeme/run.sh"]
+
+EXPOSE 8080
