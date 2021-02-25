@@ -11,7 +11,10 @@ RUN { \
 	echo "MAX_REQUESTS_JITTER=0"; \
 	echo "WATERMARK_OPTIONS=blank,DDBmeme"; \
 	} > .env
-RUN export PIPENV_VENV_IN_PROJECT="enabled"
+# RUN export PIPENV_VENV_IN_PROJECT="enabled"
+ENV WORKON_HOME /home/.local/.venvs
+RUN env
+RUN mkdir /home/.local && mkdir /home/.local/.venvs && chmod -R 777 /home/.local/
 RUN pipenv install
 RUN pipenv run poetry install
 
