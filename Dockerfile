@@ -17,6 +17,7 @@ RUN pipenv run poetry install
 COPY DDBmeme/ /home/DDBmeme/
 WORKDIR /home/DDBmeme
 RUN pipenv install --ignore-pipfile
+RUN chmod 777 ~/.local
 
 CMD ["/home/DDBmeme/run.sh"]
 
