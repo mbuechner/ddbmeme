@@ -9,14 +9,14 @@
     <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous"> {% block stylesheet %}{% endblock %}
     <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.5.0/sketchy/bootstrap.min.css" rel="stylesheet" integrity="sha384-NkI/Nlr1DZ5rUXWWdnuZb97FQRgCCcwC66DC+HUCY0oVx6BgBHUfPcwL1vwp93JZ" crossorigin="anonymous">
     <title>{% block title %}DDBmeme{% endblock %}</title>
-    <base href="{{ request.build_absolute_uri }}{% if request.META.HTTP_X_FORWARDED_PREFIX %}{{ request.META.HTTP_X_FORWARDED_PREFIX|slice:"1:" }}{% endif %}">
+    <base href="{{ request.build_absolute_uri }}">
 </head>
 
 <body>
     <br>
     <div class="container">
         <div class="jumbotron">
-            <h1 class="display-4"><a style="text-decoration: none;" href="{{ request.build_absolute_uri }}{% if request.META.HTTP_X_FORWARDED_PREFIX %}{{ request.META.HTTP_X_FORWARDED_PREFIX|slice:"1:" }}{% endif %}">DDBmeme</a></h1>
+            <h1 class="display-4"><a style="text-decoration: none;" href="{{ request.build_absolute_uri }}">DDBmeme</a></h1>
             <p class="lead">A meme generator for Deutsche Digitale Bibliothek</p>
             <hr class="my-4"> {% block content %} {% endblock %}
         </div>
