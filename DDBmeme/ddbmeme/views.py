@@ -152,9 +152,9 @@ def makemememodel(request):
         url += urllib.parse.quote_plus(bottomtext) + '/'
     url = url[:-1] + '.jpg?background=' + urllib.parse.quote_plus(image_url)
 
-    response = StreamingHttpResponse(url2yield(url), content_type="image/png")
+    response = StreamingHttpResponse(url2yield(url), content_type="image/jpeg")
 
     if download == 'true':
-        response['Content-Disposition'] = 'attachment; filename="meme_' + slugify(toptext + bottomtext) + '.png"'
+        response['Content-Disposition'] = 'attachment; filename="meme_' + slugify(toptext + bottomtext) + '.jpg"'
 
     return response
