@@ -20,13 +20,13 @@ if [ $status -ne 0 ]; then
 fi
 
 while true; do
-  pgrep -f memegen
+  sleep 300
+  pgrep -f memegen > /dev/null 2>&1
   PROCESS_1_STATUS=$?
-  pgrep -f DDBmeme
+  pgrep -f DDBmeme > /dev/null 2>&1
   PROCESS_2_STATUS=$?
   if [ $PROCESS_1_STATUS -ne 0 ] || [ $PROCESS_2_STATUS -ne 0 ]; then
     echo "One of the processes has already exited."
     exit 1
   fi
-  sleep 60
 done
