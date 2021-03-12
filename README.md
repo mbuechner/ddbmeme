@@ -26,9 +26,10 @@ Open browser: http://localhost:8080/
 | Variable             | Description                                                                                                                                                                    |
 |----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | DDB_API_KEY          | API key of Deutsche Digitale Bibliothek ([request](https://www.deutsche-digitale-bibliothek.de/user/apikey) and [documentation](https://api.deutsche-digitale-bibliothek.de/)) |
-| SECRET_KEY           | Any random character string, which should be kept secret.                                                                                                                       |
+| SECRET_KEY           | Any random character string, which should be kept secret.                                                                                                                      |
 | USE_X_FORWARDED_HOST | Set to 1 if you run DDBmeme behind a reverse proxy                                                                                                                             |
 | ALLOWED_HOSTS        | Set allowed hosts (e.g. `ddbmeme.example.org` or `localhost`, if you only run it locally)                                                                                      |
+| PATH_PREFIX          | Set path prefix to all urls, e.g. `foo/bar/` and the app will be available under http://localhost:8080/foo/bar/                                                                |
 
 ### Container build
 1. Checkout GitHub repository: `git clone https://github.com/mbuechner/ddbmeme`

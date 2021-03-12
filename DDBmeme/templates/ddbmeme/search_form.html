@@ -119,7 +119,7 @@
 {% load crispy_forms_tags %}
 
 {% block content %}
-            <form id="search" method="post" data-validate-query-url="{{ request.build_absolute_uri|slice:":-1" }}{% if request.META.HTTP_X_FORWARDED_PREFIX %}{{ request.META.HTTP_X_FORWARDED_PREFIX }}{% endif %}{% url 'autocompleteModel' %}">
+            <form id="search" method="post" data-validate-query-url="{{ request.build_absolute_uri|slice:":-1" }}{% url 'autocompleteModel' %}">
                 {% csrf_token %}
                 <div id="div_id_query" class="form-group">
                     <input type="text" name="query" maxlength="128" class="textinput textInput form-control form-control-lg" id="id_query" placeholder="https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4">
