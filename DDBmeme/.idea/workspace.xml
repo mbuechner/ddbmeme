@@ -1,22 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="3498b523-a84e-46bb-9bdf-d4236049aecd" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/DDBmeme.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Pipfile.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Pipfile.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ddbmeme/admin.py" beforeDir="false" afterPath="$PROJECT_DIR$/ddbmeme/admin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ddbmeme/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/ddbmeme/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ddbmeme/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/ddbmeme/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ddbmeme/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/ddbmeme/views.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ddbmeme/wsgi.py" beforeDir="false" afterPath="$PROJECT_DIR$/ddbmeme/wsgi.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run.sh" beforeDir="false" afterPath="$PROJECT_DIR$/run.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/base.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/ddbmeme/search_form.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/ddbmeme/search_form.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/../Dockerfile" afterDir="false" />
+    <list default="true" id="3498b523-a84e-46bb-9bdf-d4236049aecd" name="Default Changelist" comment="Updated .gitignore">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -74,8 +60,16 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1615580641724</updated>
-      <workItem from="1615580642802" duration="2629000" />
+      <workItem from="1615580642802" duration="3002000" />
     </task>
+    <task id="LOCAL-00001" summary="Updated .gitignore">
+      <created>1615583572077</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1615583572077</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -91,6 +85,10 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Updated .gitignore" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated .gitignore" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
