@@ -24,10 +24,9 @@ while true; do
   PROCESS_1_STATUS=$?
   pgrep -f DDBmeme
   PROCESS_2_STATUS=$?
-  echo $PROCESS_1_STATUS + ":" + $PROCESS_2_STATUS
-  #if [ $PROCESS_1_STATUS -ne 0 ] || [ $PROCESS_2_STATUS -ne 0 ]; then
-  #  echo "One of the processes has already exited."
-  #  exit 1
-  #fi
+  if [ $PROCESS_1_STATUS -ne 0 ] || [ $PROCESS_2_STATUS -ne 0 ]; then
+    echo "One of the processes has already exited."
+    exit 1
+  fi
   sleep 60
 done
