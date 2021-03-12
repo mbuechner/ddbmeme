@@ -11,18 +11,20 @@ RUN { \
 	echo "MAX_REQUESTS_JITTER=0"; \
 	echo "WATERMARK_OPTIONS=blank,DDBmeme"; \
 	} > .env
-# RUN export PIPENV_VENV_IN_PROJECT="enabled"
-ENV WORKON_HOME /home/.local/.venvs
-RUN mkdir /home/.local && mkdir /home/.local/.venvs
+ENV PIPENV_VENV_IN_PROJECT="enabled"
+# ENV WORKON_HOME /home/.local/.venvs
+# RUN mkdir /home/.local && mkdir /home/.local/.venvs
 RUN pipenv install
 RUN pipenv run poetry install
 
 COPY DDBmeme/ /home/DDBmeme/
 WORKDIR /home/DDBmeme
-RUN pipenv install --ignore-pipfile
-RUN chgrp -R 0 /home/DDBmeme /home/.local
-RUN chmod -R g=u /home/DDBmeme /home/.local 
+RUN pipenv install
+
+# RUN chgrp -R 0 /home/memegen /home/DDBmeme /home/.local
+# RUN chmod -R g=u /home/memegen /home/DDBmeme /home/.local 
+#RUN chgrp -R 0 /home/memegen /home/DDBmeme
+#RUN chmod -R g=u /home/memegen /home/DDBmeme
 
 CMD ["/home/DDBmeme/run.sh"]
-
 EXPOSE 8080

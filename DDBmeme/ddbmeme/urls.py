@@ -1,10 +1,12 @@
-from django.urls import path
-from ddbmeme.views import Search, autocompleteModel, maketextModel, makememeModel
 import os
 
+from django.urls import path
+
+from ddbmeme.views import Search, autocompletemodel, maketextmodel, makemememodel
+
 urlpatterns = [
-    path('test/', Search.as_view(), name='search_base'),
-    path('test/load/', autocompleteModel, name='autocompleteModel'),
-    path('test/url/', maketextModel, name='maketextModel'),
-    path('test/meme/', makememeModel, name='makememeModel'),
+    path(os.environ.get('PATH_PREFIX', ''), Search.as_view(), name='search_base'),
+    path(os.environ.get('PATH_PREFIX', '') + 'load/', autocompletemodel, name='autocompletemodel'),
+    path(os.environ.get('PATH_PREFIX', '') + 'url/', maketextmodel, name='maketextmodel'),
+    path(os.environ.get('PATH_PREFIX', '') + 'meme/', makemememodel, name='makemememodel'),
 ]

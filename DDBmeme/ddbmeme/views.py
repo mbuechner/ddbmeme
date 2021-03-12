@@ -1,12 +1,13 @@
-import os
-import requests
 import json
+import os
 import urllib
-
-from django.views.generic import CreateView
+import requests
+from django.http import HttpResponsePermanentRedirect
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
 from django.template.defaultfilters import slugify
+from django.urls import reverse
+from django.views.generic import CreateView
 
 from ddbmeme.models import Search  # Person
 
@@ -16,7 +17,7 @@ class Search(CreateView):
     fields = ('query', 'toptext', 'bottomtext',)
 
 
-def autocompleteModel(request):
+def autocompletemodel(request):
     if not request.is_ajax():
         return
 
@@ -38,7 +39,7 @@ def autocompleteModel(request):
 
     response = requests.get(query + '/binaries?oauth_consumer_key=' + api_key)
 
-    if (response.status_code != 200):
+    if response.status_code != 200:
         data['message'] = '<strong>Ohoh!</strong> I got the error ' + str(response.status_code) + ' from DDB portal. :o('
         return JsonResponse(data)
 
@@ -73,19 +74,16 @@ def autocompleteModel(request):
     return JsonResponse(data)
 
 
-def maketextModel(request):
+def maketextmodel(request):
     if not request.is_ajax():
         return
 
-    toptext = replaceReserved(request.GET.get('toptext', None))
-    bottomtext = replaceReserved(request.GET.get('bottomtext', None))
+    toptext = replacereserved(request.GET.get('toptext', None))
+    bottomtext = replacereserved(request.GET.get('bottomtext', None))
     image = request.GET.get('image', None)
 
-    url = request.build_absolute_uri('/')
-    if request.META.get('HTTP_X_FORWARDED_PREFIX'):
-       url = url[:-1] +  request.META.get('HTTP_X_FORWARDED_PREFIX') + '/meme?alt='
-    else:
-       url += 'meme?alt='
+    url = HttpResponsePermanentRedirect(reverse('makemememodel')).url
+    url += '?alt='
     url += urllib.parse.quote_plus(image)
     url += '&toptext='
     url += urllib.parse.quote_plus(toptext)
@@ -98,7 +96,6 @@ def maketextModel(request):
     }
 
     return JsonResponse(data)
-    # return HttpResponse(url)
 
 
 def url2yield(url, chunksize=1024):
@@ -116,7 +113,7 @@ def url2yield(url, chunksize=1024):
         yield chunk
 
 
-def replaceReserved(text):
+def replacereserved(text):
     text = text.replace('-', '--')
     text = text.replace('_', '__')
     text = text.replace(' ', '_')
@@ -129,7 +126,7 @@ def replaceReserved(text):
     return text
 
 
-def makememeModel(request):
+def makemememodel(request):
     image_url = request.GET.get('alt', 'https://iiif.deutsche-digitale-bibliothek.de/image/2/1dde1d53-07fe-438a-991d-d268b8b1eca7/full/!800,600/0/default.jpg')
 
     if not image_url.startswith('https://iiif.deutsche-digitale-bibliothek.de/image/'):
