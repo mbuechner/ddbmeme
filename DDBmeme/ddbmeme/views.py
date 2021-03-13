@@ -1,15 +1,16 @@
+import errno
 import json
 import os
 import urllib
 import requests
+from socket import error as SocketError
 from django.http import HttpResponsePermanentRedirect
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
 from django.template.defaultfilters import slugify
 from django.urls import reverse
 from django.views.generic import CreateView
-
-from ddbmeme.models import Search  # Person
+from ddbmeme.models import Search
 
 
 class Search(CreateView):
@@ -21,7 +22,7 @@ def autocompletemodel(request):
     if not request.is_ajax():
         return
 
-    api_key = os.environ['DDB_API_KEY']
+    api_key = os.environ.get('DDB_API_KEY', '')
 
     # if request.is_ajax():
     query = request.GET.get('query', None)
@@ -37,7 +38,12 @@ def autocompletemodel(request):
     query = query.replace('www.', 'api.')
     query = query.replace('item/', 'items/')
 
-    response = requests.get(query + '/binaries?oauth_consumer_key=' + api_key)
+    try:
+        response = requests.get(query + '/binaries?oauth_consumer_key=' + api_key)
+    except SocketError as e:
+        if e.errno != errno.ECONNRESET:
+            raise  # Not an error we are looking for
+        pass
 
     if response.status_code != 200:
         data['message'] = '<strong>Ohoh!</strong> I got the error ' + str(response.status_code) + ' from DDB portal. :o('
@@ -100,19 +106,23 @@ def maketextmodel(request):
 
 
 def url2yield(url, chunksize=1024):
-    s = requests.Session()
-    # Note: here i enabled the streaming
-    response = s.get(url, stream=True)
+    try:
+        s = requests.Session()
+        # Note: here i enabled the streaming
+        response = s.get(url, stream=True)
 
-    chunk = True
-    while chunk:
-        chunk = response.raw.read(chunksize)
+        chunk = True
+        while chunk:
+            chunk = response.raw.read(chunksize)
 
-        if not chunk:
-            break
+            if not chunk:
+                break
 
-        yield chunk
-
+            yield chunk
+    except SocketError as e:
+        if e.errno != errno.ECONNRESET:
+            raise  # Not an error we are looking for
+        pass
 
 def replacereserved(text):
     text = text.replace('-', '--')
@@ -156,6 +166,6 @@ def makemememodel(request):
     response = StreamingHttpResponse(url2yield(url), content_type="image/jpeg")
 
     if download == 'true':
-        response['Content-Disposition'] = 'attachment; filename="ddbmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'
+        response['Content-Disposition'] = 'attachment; filename="DDBmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'
 
     return response
