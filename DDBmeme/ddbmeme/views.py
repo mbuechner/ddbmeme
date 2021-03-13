@@ -82,7 +82,8 @@ def maketextmodel(request):
     bottomtext = replacereserved(request.GET.get('bottomtext', None))
     image = request.GET.get('image', None)
 
-    url = HttpResponsePermanentRedirect(reverse('makemememodel')).url
+    url = "{0}://{1}".format(request.scheme, request.get_host())
+    url += HttpResponsePermanentRedirect(reverse('makemememodel')).url
     url += '?alt='
     url += urllib.parse.quote_plus(image)
     url += '&toptext='
@@ -155,6 +156,6 @@ def makemememodel(request):
     response = StreamingHttpResponse(url2yield(url), content_type="image/jpeg")
 
     if download == 'true':
-        response['Content-Disposition'] = 'attachment; filename="meme_' + slugify(toptext + bottomtext) + '.jpg"'
+        response['Content-Disposition'] = 'attachment; filename="ddbmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'
 
     return response
