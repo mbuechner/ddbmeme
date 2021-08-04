@@ -56,7 +56,7 @@ jobs:
       - name: Push image
         run: |
           IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
-          
+
           # Change all uppercase to lowercase
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
 
@@ -72,5 +72,7 @@ jobs:
           echo IMAGE_ID=$IMAGE_ID
           echo VERSION=$VERSION
 
-          docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
+          docker tag "$IMAGE_NAME" "$IMAGE_ID:$VERSION"
+          docker push "$IMAGE_ID:$VERSION"
+          if [ "$VERSION" != "latest" ]; then docker tag "$IMAGE_NAME" "$IMAGE_ID:tagged"; fi
+          if [ "$VERSION" != "latest" ]; then docker push "$IMAGE_ID:tagged"; fi
