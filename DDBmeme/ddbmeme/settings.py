@@ -123,3 +123,5 @@ STATIC_ROOT = os.path.join(PROJECT_DIR, '../resources')
 STATIC_URL = '/resources/'
 
 CRISPY_TEMPLATE_PACK = 'bootstrap4'
+
+DEFAULT_AUTO_FIELD='django.db.models.AutoField'

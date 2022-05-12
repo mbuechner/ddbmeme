@@ -9,7 +9,7 @@ DDBmeme is a [Internet meme](https://en.wikipedia.org/wiki/Internet_meme) genera
 ![Screenshot of DDBmeme](https://raw.githubusercontent.com/mbuechner/ddbmeme/master/DDBmeme.png "DDBmeme")
 
 ## Run with Docker
-DDBmeme is at Docker Hub: https://hub.docker.com/r/mbuechner/ddbmeme
+DDBmeme is at GitHub's Docker Hub: https://github.com/mbuechner/ddbmeme/pkgs/container/ddbmeme%2Fddbmeme
 
 Pull & start Container with: 
 ```
@@ -18,7 +18,7 @@ docker run -d -p 8080:8080 -P \
   --env "SECRET_KEY=myverysecretsecretkey" \
   --env "USE_X_FORWARDED_HOST=0" \
   --env "ALLOWED_HOSTS=127.0.0.1,localhost" \
-mbuechner/ddbmeme
+ghcr.io/mbuechner/ddbmeme/ddbmeme:latest
 ```
 Open browser: http://localhost:8080/
 
@@ -51,7 +51,7 @@ ddbmeme
 version: '2'
 services:
   ddbmeme:
-    image: mbuechner/ddbmeme:latest
+    image: ghcr.io/mbuechner/ddbmeme/ddbmeme:latest
     environment:
       DDB_API_KEY: abcdefghijklm...nopqrstuvwxyz
       SECRET_KEY: myverysecretsecretkey
