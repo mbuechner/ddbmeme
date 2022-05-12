@@ -62,7 +62,7 @@ ENV RUN_GROUP 0
 
 RUN mkdir .venv/ && \
 	chown -R ${RUN_USER}:${RUN_GROUP} . && \
-	python3 -m pip install --no-cache --upgrade pip pipenv poetry && \
+	python3 -m pip install --no-cache --upgrade pip pipenv poetry honcho && \
 	{ \
 		echo "WEB_CONCURRENCY=2"; \
 		echo "MAX_REQUESTS=0"; \
@@ -71,7 +71,7 @@ RUN mkdir .venv/ && \
 	} > .env && \
 	pipenv install && \
 	pipenv run poetry install && \
-	pipenv run poetry run honcho install;
+	pipenv run poetry run honcho check;
 
 # add supervisord config
 COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
