@@ -69,7 +69,8 @@ RUN chown -R ${RUN_USER}:${RUN_GROUP} . && \
 		echo "WATERMARK_OPTIONS=blank,DDBmeme"; \
 	} > .env && \
 	pipenv install && \
-	pipenv run poetry install;
+	pipenv run poetry install && \
+	pipenv run poetry run honcho install;
 
 # add supervisord config
 COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
