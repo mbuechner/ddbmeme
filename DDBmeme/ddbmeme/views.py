@@ -17,9 +17,11 @@ class Search(CreateView):
     model = Search
     fields = ('query', 'toptext', 'bottomtext',)
 
+def is_ajax(request):
+    return request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
 
 def autocompletemodel(request):
-    if not request.is_ajax():
+    if not is_ajax(request):
         return
 
     api_key = os.environ.get('DDB_API_KEY', '')
@@ -81,7 +83,7 @@ def autocompletemodel(request):
 
 
 def maketextmodel(request):
-    if not request.is_ajax():
+    if not is_ajax(request):
         return
 
     toptext = replacereserved(request.GET.get('toptext', None))
