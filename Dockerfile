@@ -60,7 +60,8 @@ ENV PIPENV_VENV_IN_PROJECT="enabled"
 ENV RUN_USER nobody
 ENV RUN_GROUP 0
 
-RUN chown -R ${RUN_USER}:${RUN_GROUP} . && \
+RUN mkdir .venv/ && \
+	chown -R ${RUN_USER}:${RUN_GROUP} . && \
 	python3 -m pip install --no-cache --upgrade pip pipenv poetry && \
 	{ \
 		echo "WEB_CONCURRENCY=2"; \
@@ -78,7 +79,8 @@ COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/co
 # add DDBmeme and build it
 COPY --chown=${RUN_USER}:${RUN_GROUP} DDBmeme/ /home/ddbmeme/
 WORKDIR /home/ddbmeme
-RUN pipenv install && \
+RUN mkdir .venv/ && \
+	pipenv install && \
 	apk del --no-network .build-deps && \
 	touch /run/supervisord.pid && chgrp -R ${RUN_GROUP} /run/supervisord.pid && chmod -R g=u /run/supervisord.pid;
 
