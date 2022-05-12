@@ -80,6 +80,7 @@ COPY --chown=${RUN_USER}:${RUN_GROUP} DDBmeme/ /home/ddbmeme/
 WORKDIR /home/ddbmeme
 RUN mkdir .venv/ && \
 	pipenv install && \
+	pipenv run python manage.py migrate && \
 	apk del --no-network .build-deps && \
 	touch /run/supervisord.pid && chgrp -R ${RUN_GROUP} /run/supervisord.pid && chmod -R g=u /run/supervisord.pid;
 
