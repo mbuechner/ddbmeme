@@ -2,6 +2,7 @@ FROM python:3.10-alpine
 MAINTAINER Michael Büchner <m.buechner@dnb.de>
 ARG MEMEGEN_GIT_HASH=afefed2952658d9d2da78489aed493d964103400
 RUN apk add \
+		curl \
 		freetype-dev \
 		jpeg-dev \
 		openjpeg \
