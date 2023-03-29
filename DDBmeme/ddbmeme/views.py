@@ -53,7 +53,7 @@ def autocompletemodel(request):
 
     j = json.loads(response.text)
     iiif_ulr_prefix = 'https://iiif.deutsche-digitale-bibliothek.de/image/2/'
-    iiif_url_suffix = '/full/!800,600/0/default.jpg'
+    iiif_url_suffix = '/full/full/0/default.jpg'
 
     count = 0
 
