@@ -1,6 +1,6 @@
-FROM python:3.10-alpine
-MAINTAINER Michael Büchner <m.buechner@dnb.de>
-ARG MEMEGEN_GIT_HASH=afefed2952658d9d2da78489aed493d964103400
+FROM python:3.13-alpine
+LABEL maintainer="Michael Büchner <m.buechner@dnb.de>"
+ARG MEMEGEN_GIT_HASH=a30ce9e5de7dd36d7c9a41336bc7fe319ab4a196
 RUN apk add \
 		curl \
 		freetype-dev \
@@ -59,8 +59,8 @@ RUN apk add \
 WORKDIR /home/memegen
 
 ENV PIPENV_VENV_IN_PROJECT="enabled"
-ENV RUN_USER nobody
-ENV RUN_GROUP 0
+ENV RUN_USER=nobody
+ENV RUN_GROUP=0
 
 RUN mkdir .venv/ && \
 	chown -R ${RUN_USER}:${RUN_GROUP} . && \
@@ -72,7 +72,7 @@ RUN mkdir .venv/ && \
 COPY --chown=${RUN_USER}:${RUN_GROUP} DDBmeme/ /home/ddbmeme/
 WORKDIR /home/ddbmeme
 RUN mkdir .venv/ && \
-	pipenv install && \
+	pipenv install -r requirements.txt && \
 	pipenv run python manage.py migrate;
 
 # add supervisord config
