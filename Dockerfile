@@ -59,12 +59,13 @@ RUN apk add \
 WORKDIR /home/memegen
 
 ENV PIPENV_VENV_IN_PROJECT="enabled"
+ENV POETRY_VIRTUALENVS_CREATE=false
 ENV RUN_USER=nobody
-ENV RUN_GROUP=0
+ENV RUN_GROUP=65534
 
 RUN chown -R ${RUN_USER}:${RUN_GROUP} . && \
-	python3 -m pip install --no-cache-dir --upgrade poetry && \
-	poetry install;
+	python3 -m pip install --no-cache-dir poetry && \
+	poetry install --only=main;
 
 # add DDBmeme and build it
 COPY --chown=${RUN_USER}:${RUN_GROUP} DDBmeme/ /home/ddbmeme/
@@ -76,7 +77,9 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt && \
 COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 RUN apk del --no-network .build-deps && \
-	touch /run/supervisord.pid && chgrp -R ${RUN_GROUP} /run/supervisord.pid && chmod -R g=u /run/supervisord.pid;
+	touch /run/supervisord.pid && chown ${RUN_USER}:${RUN_USER} /run/supervisord.pid && chmod 664 /run/supervisord.pid;
 
+# Run supervisord as nobody
+USER ${RUN_USER}
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 EXPOSE 8080
