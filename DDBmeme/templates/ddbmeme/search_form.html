@@ -82,8 +82,6 @@
         $('#id_query').focusout(function () {
             $(this).attr('placeholder', placeholderText);
         });
-
-
     });
 
     // Load archive on ready
@@ -230,6 +228,10 @@
             url: form.attr("data-validate-query-url"),
             data: form.serialize(),
             dataType: 'json',
+            beforeSend: function () {
+                $('#generate').prop('disabled', true).attr('aria-busy', 'true');
+                $('#memeSpinner').removeClass('d-none');
+            },
             success: function (data) {
                 if (data.url) {
                     $('.carousel-inner > .active img').attr('data-src-download', data.download);
@@ -251,6 +253,13 @@
                     // reset flag after handling one generate
                     skipNextArchiveSave = false;
                 }
+            },
+            error: function (jqXHR, textStatus, err) {
+                console.error('Generate request failed', textStatus, err);
+            },
+            complete: function () {
+                $('#generate').prop('disabled', false).removeAttr('aria-busy');
+                $('#memeSpinner').addClass('d-none');
             }
         });
     });
@@ -290,7 +299,7 @@
 <div class="collapse my-4" id="meme">
     <div class="row">
         <div class="col-md-6">
-            <div class="card meme-card">
+            <div class="card meme-card position-relative">
                 <div id="carouselIndicators" class="carousel carousel-dark slide carousel-fade"
                     data-bs-interval="false">
                     <div class="carousel-indicators"></div>
@@ -303,6 +312,11 @@
                         <span class="carousel-control-next-icon" aria-hidden="true"></span>
                         <span class="visually-hidden">Next</span>
                     </a>
+                </div>
+                <!-- Spinner overlay shown while generating/loading -->
+                <div id="memeSpinner" class="d-none position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(255,255,255,0.6); z-index: 10;">
+                    <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                    <span class="visually-hidden">Loading...</span>
                 </div>
             </div>
             <br>

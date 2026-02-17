@@ -62,18 +62,15 @@ ENV PIPENV_VENV_IN_PROJECT="enabled"
 ENV RUN_USER=nobody
 ENV RUN_GROUP=0
 
-RUN mkdir .venv/ && \
-	chown -R ${RUN_USER}:${RUN_GROUP} . && \
-	python3 -m pip install --no-cache --upgrade pipenv poetry && \
-	pipenv install && \
-	pipenv run poetry install;
+RUN chown -R ${RUN_USER}:${RUN_GROUP} . && \
+	python3 -m pip install --no-cache-dir --upgrade poetry && \
+	poetry install;
 
 # add DDBmeme and build it
 COPY --chown=${RUN_USER}:${RUN_GROUP} DDBmeme/ /home/ddbmeme/
 WORKDIR /home/ddbmeme
-RUN mkdir .venv/ && \
-	pipenv install -r requirements.txt && \
-	pipenv run python manage.py migrate;
+RUN python3 -m pip install --no-cache-dir -r requirements.txt && \
+	python3 manage.py migrate;
 
 # add supervisord config
 COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
