@@ -1,7 +1,11 @@
 import errno
 import json
 import urllib.parse
+import logging
 import requests
+import urllib3.exceptions
+
+# logging is configured centrally in settings.py; use module logger
 from socket import error as SocketError
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
@@ -59,7 +63,7 @@ def autocompletemodel(request):
         data['message'] = '<strong>Ohoh!</strong> Invalid response from DDB portal.'
         return JsonResponse(data)
     iiif_ulr_prefix = 'https://iiif.deutsche-digitale-bibliothek.de/image/2/'
-    iiif_url_suffix = '/full/full/0/default.jpg'
+    iiif_url_suffix = '/full/!800,600/0/default.jpg'
 
     count = 0
 
@@ -112,23 +116,25 @@ def maketextmodel(request):
     return JsonResponse(data)
 
 def url2yield(url, chunksize=1024):
+    logger = logging.getLogger(__name__)
     try:
         s = requests.Session()
-        # Note: here i enabled the streaming
-        response = s.get(url, stream=True)
+        # enable streaming with a timeout to avoid hanging indefinitely
+        response = s.get(url, stream=True, timeout=10)
+        response.raise_for_status()
 
-        chunk = True
-        while chunk:
-            chunk = response.raw.read(chunksize)
-
+        for chunk in response.iter_content(chunk_size=chunksize):
             if not chunk:
                 break
-
             yield chunk
     except SocketError as e:
         if e.errno != errno.ECONNRESET:
-            raise  # Not an error we are looking for
-        pass
+            raise
+        logger.error("Socket connection reset while streaming %s: %s", url, e)
+    except (requests.RequestException, urllib3.exceptions.ProtocolError) as e:
+        logger.error("HTTP streaming failed for %s: %s", url, e)
+    except Exception as e:
+        logger.exception("Unexpected error while streaming %s: %s", url, e)
 
 def replacereserved(text):
     text = text.replace(' ', '_')

@@ -234,9 +234,8 @@
             },
             success: function (data) {
                 if (data.url) {
+                    // update attributes needed for links first
                     $('.carousel-inner > .active img').attr('data-src-download', data.download);
-                    $('.carousel-inner > .active img').attr('src', data.url);
-                    updateSocialLinks();
 
                     // Save to archive only when user explicitly generated
                     if (!skipNextArchiveSave) {
@@ -252,14 +251,48 @@
                     }
                     // reset flag after handling one generate
                     skipNextArchiveSave = false;
+
+                    // Ensure spinner remains visible until the new image actually finishes loading
+                    var $img = $('.carousel-inner > .active img');
+                    // remove any previous handlers
+                    $img.off('.ddbmeme');
+
+                    // Attach handlers BEFORE changing src to reliably catch the load event
+                    $img.on('load.ddbmeme', function () {
+                        $('#generate').prop('disabled', false).removeAttr('aria-busy');
+                        $('#memeSpinner').addClass('d-none');
+                        updateSocialLinks();
+                    });
+                    $img.on('error.ddbmeme', function () {
+                        console.error('Image failed to load', data.url);
+                        $('#generate').prop('disabled', false).removeAttr('aria-busy');
+                        $('#memeSpinner').addClass('d-none');
+                    });
+
+                    // Fallback: if load doesn't fire within 15s, hide spinner
+                    setTimeout(function () {
+                        if (!$('#memeSpinner').hasClass('d-none')) {
+                            console.warn('Image load timeout for', data.url);
+                            $('#generate').prop('disabled', false).removeAttr('aria-busy');
+                            $('#memeSpinner').addClass('d-none');
+                            updateSocialLinks();
+                        }
+                    }, 15000);
+
+                    // finally set the src to start loading the image
+                    $img.attr('src', data.url);
+                    // also update social/download links immediately if needed
+                    updateSocialLinks();
                 }
             },
             error: function (jqXHR, textStatus, err) {
                 console.error('Generate request failed', textStatus, err);
-            },
-            complete: function () {
+                // make sure spinner/button state is reset on ajax error
                 $('#generate').prop('disabled', false).removeAttr('aria-busy');
                 $('#memeSpinner').addClass('d-none');
+            },
+            complete: function () {
+                // Do not hide the spinner here — wait for image load event instead.
             }
         });
     });
