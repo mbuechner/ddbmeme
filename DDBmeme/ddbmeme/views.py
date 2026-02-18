@@ -151,19 +151,26 @@ def url2yield(url, chunksize=1024):
         logger.exception("Unexpected error while streaming %s: %s", url, e)
 
 def replacereserved(text):
-    text = text.replace(' ', '_')
-    text = text.replace('_', '__')
-    text = text.replace('-', '--')
-    text = text.replace('?', '~q')
-    text = text.replace('&', '~a')
-    text = text.replace('%', '~p')
-    text = text.replace('#', '~h')
-    text = text.replace('/', '~s')
-    text = text.replace('\\', '~b')
-    text = text.replace('<', '~l')
-    text = text.replace('>', '~g')
-    text = text.replace('"', '\'\'')
-    return text
+    # Use a character-by-character mapping to avoid replacements colliding
+    mapping = {
+        '_': '__',
+        ' ': '_',
+        '-': '--',
+        '?': '~q',
+        '&': '~a',
+        '%': '~p',
+        '#': '~h',
+        '/': '~s',
+        '\\': '~b',
+        '<': '~l',
+        '>': '~g',
+        '"': "''",
+    }
+    # Build result by mapping each original character once
+    parts = []
+    for ch in text:
+        parts.append(mapping.get(ch, ch))
+    return ''.join(parts)
 
 def makemememodel(request):
     image_url = request.GET.get('alt', 'https://iiif.deutsche-digitale-bibliothek.de/image/2/5df8523e-7ee1-4aa6-b690-cb2c7580f13c/full/!800,600/0/default.jpg')
