@@ -161,7 +161,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Memegen service configuration (can be overridden via env)
 MEMEGEN_BASE_URL = os.environ.get('MEMEGEN_BASE_URL', 'http://localhost:5001')
 # Connect, Read timeouts in seconds as comma-separated env var, e.g. '5,20'
-_m_t = os.environ.get('MEMEGEN_TIMEOUT', '5,120')
+_m_t = os.environ.get('MEMEGEN_TIMEOUT', '5,180')
 try:
     _parsed = [int(x.strip()) for x in _m_t.split(',') if x.strip()]
     if len(_parsed) >= 2:
@@ -169,11 +169,21 @@ try:
     elif len(_parsed) == 1:
         MEMEGEN_TIMEOUT = (_parsed[0], _parsed[0])
     else:
-        MEMEGEN_TIMEOUT = (5, 120)
+        MEMEGEN_TIMEOUT = (5, 180)
 except Exception:
-    MEMEGEN_TIMEOUT = (5, 120)
+    MEMEGEN_TIMEOUT = (5, 180)
 
 try:
-    MEMEGEN_RETRY_TOTAL = max(0, int(os.environ.get('MEMEGEN_RETRY_TOTAL', '2')))
+    MEMEGEN_RETRY_TOTAL = max(0, int(os.environ.get('MEMEGEN_RETRY_TOTAL', '0')))
 except Exception:
-    MEMEGEN_RETRY_TOTAL = 2
+    MEMEGEN_RETRY_TOTAL = 0
+
+try:
+    MEMEGEN_MAX_CONCURRENCY = max(1, int(os.environ.get('MEMEGEN_MAX_CONCURRENCY', '2')))
+except Exception:
+    MEMEGEN_MAX_CONCURRENCY = 2
+
+try:
+    MEMEGEN_QUEUE_WAIT_SECONDS = max(0, int(os.environ.get('MEMEGEN_QUEUE_WAIT_SECONDS', '30')))
+except Exception:
+    MEMEGEN_QUEUE_WAIT_SECONDS = 30

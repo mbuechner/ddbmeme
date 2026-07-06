@@ -2,6 +2,7 @@ import json
 import urllib.parse
 import logging
 import requests
+from threading import BoundedSemaphore
 from django.conf import settings
 from requests.adapters import HTTPAdapter
 from django.http import HttpResponse
@@ -21,6 +22,9 @@ _retry_total = int(getattr(settings, 'MEMEGEN_RETRY_TOTAL', 1))
 adapter = HTTPAdapter(max_retries=_retry_total)
 _session.mount('http://', adapter)
 _session.mount('https://', adapter)
+_memegen_max_concurrency = max(1, int(getattr(settings, 'MEMEGEN_MAX_CONCURRENCY', 2)))
+_memegen_queue_wait_seconds = max(0, int(getattr(settings, 'MEMEGEN_QUEUE_WAIT_SECONDS', 30)))
+_memegen_semaphore = BoundedSemaphore(_memegen_max_concurrency)
 
 class Search(CreateView):
     model = SearchModel
@@ -174,13 +178,18 @@ def makemememodel(request):
         url += urllib.parse.quote_plus(bottomtext) + '/'
     url = url[:-1] + '.jpg?background=' + urllib.parse.quote_plus(image_url)
 
+    acquired = _memegen_semaphore.acquire(timeout=_memegen_queue_wait_seconds)
+    if not acquired:
+        logger.warning("Memegen busy: concurrency limit reached")
+        return HttpResponse("Image service is busy, please retry in a moment", status=503)
+
     try:
         # request the generated image from the memegen service using module session + configured timeouts
         base = getattr(settings, 'MEMEGEN_BASE_URL', 'http://localhost:5001').rstrip('/')
         # if the url was built with hardcoded base, replace it to respect settings
         if url.startswith('http://localhost:5001') or url.startswith('http://127.0.0.1:5001'):
             url = base + url[url.find('/images/custom/') :]
-        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (5, 45))
+        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (5, 180))
         # Buffer image first so timeout/failure can return a clean HTTP status.
         resp = _session.get(url, timeout=timeout)
         resp.raise_for_status()
@@ -201,3 +210,5 @@ def makemememodel(request):
     except Exception as e:
         logger.exception("Unexpected error contacting memegen for %s: %s", url, e)
         return HttpResponse("Internal error", status=500)
+    finally:
+        _memegen_semaphore.release()

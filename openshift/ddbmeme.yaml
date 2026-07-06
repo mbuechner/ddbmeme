@@ -47,12 +47,28 @@ spec:
               value: ""
             - name: LOG_LEVEL
               value: INFO
+            - name: GUNICORN_WORKERS
+              value: "1"
+            - name: GUNICORN_THREADS
+              value: "2"
             - name: GUNICORN_TIMEOUT
               value: "180"
             - name: MEMEGEN_TIMEOUT
-              value: "5,120"
+              value: "5,180"
             - name: MEMEGEN_RETRY_TOTAL
+              value: "0"
+            - name: MEMEGEN_MAX_CONCURRENCY
               value: "2"
+            - name: MEMEGEN_QUEUE_WAIT_SECONDS
+              value: "30"
+            - name: MEMEGEN_GUNICORN_TIMEOUT
+              value: "180"
+            - name: MEMEGEN_WORKERS
+              value: "1"
+            - name: MEMEGEN_MAX_REQUESTS
+              value: "200"
+            - name: MEMEGEN_MAX_REQUESTS_JITTER
+              value: "30"
           readinessProbe:
             httpGet:
               path: /healthz

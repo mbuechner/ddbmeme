@@ -33,12 +33,18 @@ Open http://localhost:8080/ in your browser.
 | USE_X_FORWARDED_HOST | Set to `1` when DDBmeme runs behind a reverse proxy or OpenShift route.                                                                                                         |
 | ALLOWED_HOSTS        | Comma-separated list of allowed hosts such as `ddbmeme.example.org` or `localhost`.                                                                                             |
 | PATH_PREFIX          | Optional URL prefix such as `foo/bar/`. The UI is then available at `http://localhost:8080/foo/bar/`.                                                                          |
-| GUNICORN_WORKERS     | Optional number of Gunicorn worker processes for the Django app. Default: `2`.                                                                                                  |
-| GUNICORN_THREADS     | Optional number of Gunicorn threads per worker. Default: `4`.                                                                                                                    |
+| GUNICORN_WORKERS     | Optional number of Gunicorn worker processes for the Django app. Default: `1` (safer for single-container memory pressure).                                                     |
+| GUNICORN_THREADS     | Optional number of Gunicorn threads per worker. Default: `2`.                                                                                                                    |
 | GUNICORN_TIMEOUT     | Optional Gunicorn request timeout in seconds. Default: `180`.                                                                                                                    |
 | MEMEGEN_BASE_URL     | Optional base URL for the local meme generation service. Default: `http://localhost:5001`.                                                                                      |
-| MEMEGEN_TIMEOUT      | Optional memegen connect/read timeout as `connect,read` in seconds. Default: `5,120`.                                                                                            |
-| MEMEGEN_RETRY_TOTAL  | Optional retry count for memegen GET requests on transient failures and timeouts. Default: `2`.                                                                                 |
+| MEMEGEN_TIMEOUT      | Optional memegen connect/read timeout as `connect,read` in seconds. Default: `5,180`.                                                                                            |
+| MEMEGEN_RETRY_TOTAL  | Optional retry count for memegen GET requests. Default: `0` to avoid duplicate long-running requests under load.                                                                |
+| MEMEGEN_MAX_CONCURRENCY | Max concurrent requests from Django to memegen. Default: `2`.                                                                                                                 |
+| MEMEGEN_QUEUE_WAIT_SECONDS | Max wait time in seconds for a free memegen slot before returning `503`. Default: `30`.                                                                                   |
+| MEMEGEN_GUNICORN_TIMEOUT | Memegen gunicorn worker timeout in seconds. Default: `180`.                                                                                                                  |
+| MEMEGEN_WORKERS      | Number of memegen gunicorn workers. Default: `1`.                                                                                                                                |
+| MEMEGEN_MAX_REQUESTS | Restart memegen worker after this many requests to limit long-term memory growth. Default: `200`.                                                                               |
+| MEMEGEN_MAX_REQUESTS_JITTER | Random jitter for memegen worker recycling. Default: `30`.                                                                                                                |
 
 No DDB API key is required.
 
@@ -64,6 +70,12 @@ oc apply -f openshift/ddbmeme.yaml
 The Django app is now served by Gunicorn instead of Django's development server.
 Supervisor retries both application processes before the container is treated as failed.
 This reduces unnecessary pod restarts for short-lived child process failures while still allowing OpenShift to restart the pod if a process reaches the `FATAL` state.
+
+When downstream image generation is slow, DDBmeme now applies controlled backpressure:
+
+- requests to the local memegen service are concurrency-limited
+- excess requests wait briefly in-process and return `503` if the service stays saturated
+- memegen worker timeouts are aligned with Django request timeouts
 
 ### Container build
 1. Clone the repository: `git clone https://github.com/mbuechner/ddbmeme`
