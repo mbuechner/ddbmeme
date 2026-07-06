@@ -1,6 +1,6 @@
-FROM python:3.13-alpine
+FROM python:3.14-alpine
 LABEL maintainer="Michael Büchner <m.buechner@dnb.de>"
-ARG MEMEGEN_GIT_HASH=a30ce9e5de7dd36d7c9a41336bc7fe319ab4a196
+ARG MEMEGEN_GIT_HASH=c10161405d011d63d0734259b1c3ef5b446f6441
 RUN apk add \
 		curl \
 		freetype-dev \

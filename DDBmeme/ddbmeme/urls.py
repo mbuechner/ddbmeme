@@ -2,11 +2,14 @@ import os
 
 from django.urls import path
 
-from ddbmeme.views import Search, autocompletemodel, maketextmodel, makemememodel
+from ddbmeme.views import Search, autocompletemodel, health, maketextmodel, makemememodel
+
+path_prefix = os.environ.get('PATH_PREFIX', '')
 
 urlpatterns = [
-    path(os.environ.get('PATH_PREFIX', ''), Search.as_view(), name='search_base'),
-    path(os.environ.get('PATH_PREFIX', '') + 'load/', autocompletemodel, name='autocompletemodel'),
-    path(os.environ.get('PATH_PREFIX', '') + 'url/', maketextmodel, name='maketextmodel'),
-    path(os.environ.get('PATH_PREFIX', '') + 'meme/', makemememodel, name='makemememodel'),
+    path('healthz', health, name='health'),
+    path(path_prefix, Search.as_view(), name='search_base'),
+    path(path_prefix + 'load/', autocompletemodel, name='autocompletemodel'),
+    path(path_prefix + 'url/', maketextmodel, name='maketextmodel'),
+    path(path_prefix + 'meme/', makemememodel, name='makemememodel'),
 ]

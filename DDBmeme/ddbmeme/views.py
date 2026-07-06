@@ -3,6 +3,7 @@ import json
 import urllib.parse
 import requests
 from socket import error as SocketError
+from django.http import HttpResponse
 from django.http import JsonResponse
 from django.http import StreamingHttpResponse
 from django.template.defaultfilters import slugify
@@ -14,6 +15,10 @@ from ddbmeme.models import Search as SearchModel
 class Search(CreateView):
     model = SearchModel
     fields = ('query', 'toptext', 'bottomtext',)
+
+
+def health(request):
+    return HttpResponse('ok', content_type='text/plain')
 
 def is_ajax(request):
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
