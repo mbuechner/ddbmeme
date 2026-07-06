@@ -69,6 +69,14 @@ spec:
               value: "200"
             - name: MEMEGEN_MAX_REQUESTS_JITTER
               value: "30"
+            - name: WEB_CONCURRENCY
+              value: "1"
+            - name: MAX_REQUESTS
+              value: "200"
+            - name: MAX_REQUESTS_JITTER
+              value: "30"
+            - name: TIMEOUT
+              value: "180"
           readinessProbe:
             httpGet:
               path: /healthz

@@ -45,6 +45,10 @@ Open http://localhost:8080/ in your browser.
 | MEMEGEN_WORKERS      | Number of memegen gunicorn workers. Default: `1`.                                                                                                                                |
 | MEMEGEN_MAX_REQUESTS | Restart memegen worker after this many requests to limit long-term memory growth. Default: `200`.                                                                               |
 | MEMEGEN_MAX_REQUESTS_JITTER | Random jitter for memegen worker recycling. Default: `30`.                                                                                                                |
+| WEB_CONCURRENCY      | Upstream memegen worker setting. In this deployment mapped to memegen gunicorn workers. Recommended upstream baseline: `2`; current robust default here: `1`.                  |
+| MAX_REQUESTS         | Upstream memegen worker recycle setting. Upstream default: `0` (disabled); current robust default here: `200`.                                                                  |
+| MAX_REQUESTS_JITTER  | Upstream memegen recycle jitter setting. Upstream default: `0`; current robust default here: `30`.                                                                              |
+| TIMEOUT              | Upstream memegen gunicorn timeout. Upstream container default: `20`; for slow custom backgrounds current robust default here: `180`.                                            |
 
 No DDB API key is required.
 
@@ -76,6 +80,9 @@ When downstream image generation is slow, DDBmeme now applies controlled backpre
 - requests to the local memegen service are concurrency-limited
 - excess requests wait briefly in-process and return `503` if the service stays saturated
 - memegen worker timeouts are aligned with Django request timeouts
+
+Upstream memegen baseline (from the project deployment defaults) is typically `WEB_CONCURRENCY=2`, `MAX_REQUESTS=0`, `MAX_REQUESTS_JITTER=0`, and a relatively short `TIMEOUT` around `20` seconds.
+For this combined-container OpenShift setup with external background images, more conservative and slower-timeout values are usually more stable.
 
 ### Container build
 1. Clone the repository: `git clone https://github.com/mbuechner/ddbmeme`
