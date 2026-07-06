@@ -84,6 +84,14 @@ When downstream image generation is slow, DDBmeme now applies controlled backpre
 Upstream memegen baseline (from the project deployment defaults) is typically `WEB_CONCURRENCY=2`, `MAX_REQUESTS=0`, `MAX_REQUESTS_JITTER=0`, and a relatively short `TIMEOUT` around `20` seconds.
 For this combined-container OpenShift setup with external background images, more conservative and slower-timeout values are usually more stable.
 
+To avoid a first-request cold start, this setup uses a built-in zero-config startup sequence:
+
+- wait for memegen readiness on `http://127.0.0.1:5001/test`
+- send one internal prewarm request to `/images/fry/warmup/_.jpg`
+- start Django afterwards
+
+Startup logs include explicit `"[Startup] ..."` messages so readiness and prewarm behavior are visible in container logs.
+
 ### Container build
 1. Clone the repository: `git clone https://github.com/mbuechner/ddbmeme`
 2. Change into the project directory: `cd ddbmeme`
