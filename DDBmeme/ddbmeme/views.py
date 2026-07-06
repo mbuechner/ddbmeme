@@ -1,16 +1,35 @@
 import errno
 import json
 import urllib.parse
+import logging
 import requests
+import urllib3.exceptions
+from django.conf import settings
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from socket import error as SocketError
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.http import StreamingHttpResponse
+from django.http import StreamingHttpResponse, HttpResponse
 from django.template.defaultfilters import slugify
 from django.urls import reverse
 from django.views.generic import CreateView
 from django.http import HttpResponseBadRequest
 from ddbmeme.models import Search as SearchModel
+
+# logging is configured centrally in settings.py; use module logger
+logger = logging.getLogger(__name__)
+
+# Module-level requests session with retries to reduce transient errors
+_session = requests.Session()
+try:
+    _retries = Retry(total=3, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=frozenset(["GET", "POST"]))
+except TypeError:
+    # older urllib3 uses method_whitelist
+    _retries = Retry(total=3, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504), method_whitelist=frozenset(["GET", "POST"]))
+adapter = HTTPAdapter(max_retries=_retries)
+_session.mount('http://', adapter)
+_session.mount('https://', adapter)
 
 class Search(CreateView):
     model = SearchModel
@@ -64,7 +83,7 @@ def autocompletemodel(request):
         data['message'] = '<strong>Ohoh!</strong> Invalid response from DDB portal.'
         return JsonResponse(data)
     iiif_ulr_prefix = 'https://iiif.deutsche-digitale-bibliothek.de/image/2/'
-    iiif_url_suffix = '/full/full/0/default.jpg'
+    iiif_url_suffix = '/full/!800,600/0/default.jpg'
 
     count = 0
 
@@ -118,37 +137,45 @@ def maketextmodel(request):
 
 def url2yield(url, chunksize=1024):
     try:
-        s = requests.Session()
-        # Note: here i enabled the streaming
-        response = s.get(url, stream=True)
+        # enable streaming with a configured timeout
+        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (10, 10))
+        response = _session.get(url, stream=True, timeout=timeout)
+        response.raise_for_status()
 
-        chunk = True
-        while chunk:
-            chunk = response.raw.read(chunksize)
-
+        for chunk in response.iter_content(chunk_size=chunksize):
             if not chunk:
                 break
-
             yield chunk
     except SocketError as e:
         if e.errno != errno.ECONNRESET:
-            raise  # Not an error we are looking for
-        pass
+            raise
+        logger.error("Socket connection reset while streaming %s: %s", url, e)
+    except (requests.RequestException, urllib3.exceptions.ProtocolError) as e:
+        logger.error("HTTP streaming failed for %s: %s", url, e)
+    except Exception as e:
+        logger.exception("Unexpected error while streaming %s: %s", url, e)
 
 def replacereserved(text):
-    text = text.replace(' ', '_')
-    text = text.replace('_', '__')
-    text = text.replace('-', '--')
-    text = text.replace('?', '~q')
-    text = text.replace('&', '~a')
-    text = text.replace('%', '~p')
-    text = text.replace('#', '~h')
-    text = text.replace('/', '~s')
-    text = text.replace('\\', '~b')
-    text = text.replace('<', '~l')
-    text = text.replace('>', '~g')
-    text = text.replace('"', '\'\'')
-    return text
+    # Use a character-by-character mapping to avoid replacements colliding
+    mapping = {
+        '_': '__',
+        ' ': '_',
+        '-': '--',
+        '?': '~q',
+        '&': '~a',
+        '%': '~p',
+        '#': '~h',
+        '/': '~s',
+        '\\': '~b',
+        '<': '~l',
+        '>': '~g',
+        '"': "''",
+    }
+    # Build result by mapping each original character once
+    parts = []
+    for ch in text:
+        parts.append(mapping.get(ch, ch))
+    return ''.join(parts)
 
 def makemememodel(request):
     image_url = request.GET.get('alt', 'https://iiif.deutsche-digitale-bibliothek.de/image/2/5df8523e-7ee1-4aa6-b690-cb2c7580f13c/full/!800,600/0/default.jpg')
@@ -176,9 +203,28 @@ def makemememodel(request):
         url += urllib.parse.quote_plus(bottomtext) + '/'
     url = url[:-1] + '.jpg?background=' + urllib.parse.quote_plus(image_url)
 
-    response = StreamingHttpResponse(url2yield(url), content_type="image/jpeg")
+    try:
+        # request the generated image from the memegen service using module session + configured timeouts
+        base = getattr(settings, 'MEMEGEN_BASE_URL', 'http://localhost:5001').rstrip('/')
+        # if the url was built with hardcoded base, replace it to respect settings
+        if url.startswith('http://localhost:5001') or url.startswith('http://127.0.0.1:5001'):
+            url = base + url[url.find('/images/custom/') :]
+        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (5, 20))
+        resp = _session.get(url, stream=True, timeout=timeout)
+        resp.raise_for_status()
 
-    if download == 'true':
-        response['Content-Disposition'] = 'attachment; filename="DDBmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'
+        response = StreamingHttpResponse(resp.iter_content(chunk_size=8192), content_type="image/jpeg")
 
-    return response
+        if download == 'true':
+            response['Content-Disposition'] = 'attachment; filename="DDBmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'
+
+        return response
+    except requests.Timeout as e:
+        logger.error("Memegen timeout for %s: %s", url, e)
+        return HttpResponse("Image generation timed out", status=504)
+    except requests.RequestException as e:
+        logger.error("Memegen request failed for %s: %s", url, e)
+        return HttpResponse("Image generation failed", status=502)
+    except Exception as e:
+        logger.exception("Unexpected error contacting memegen for %s: %s", url, e)
+        return HttpResponse("Internal error", status=500)

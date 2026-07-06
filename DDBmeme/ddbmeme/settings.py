@@ -157,3 +157,12 @@ LOGGING = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
+# Memegen service configuration (can be overridden via env)
+MEMEGEN_BASE_URL = os.environ.get('MEMEGEN_BASE_URL', 'http://localhost:5001')
+# Connect, Read timeouts in seconds as comma-separated env var, e.g. '5,20'
+_m_t = os.environ.get('MEMEGEN_TIMEOUT', '5,20')
+try:
+    MEMEGEN_TIMEOUT = tuple(int(x) for x in _m_t.split(','))
+except Exception:
+    MEMEGEN_TIMEOUT = (5, 20)
