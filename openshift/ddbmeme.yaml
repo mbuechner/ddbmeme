@@ -39,6 +39,10 @@ spec:
               value: "1"
             - name: USE_X_FORWARDED_HOST
               value: "1"
+            - name: HOME
+              value: "/tmp"
+            - name: TMPDIR
+              value: "/tmp"
             - name: PATH_PREFIX
               value: ""
             - name: LOG_LEVEL
