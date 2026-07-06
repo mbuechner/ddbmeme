@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ddbmeme-secret
+type: Opaque
+stringData:
+  SECRET_KEY: change-me-to-a-random-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ddbmeme
+  labels:
+    app: ddbmeme
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ddbmeme
+  template:
+    metadata:
+      labels:
+        app: ddbmeme
+    spec:
+      containers:
+        - name: ddbmeme
+          image: ghcr.io/mbuechner/ddbmeme/ddbmeme:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ddbmeme-secret
+                  key: SECRET_KEY
+            - name: ALLOW_ALL_HOSTS
+              value: "1"
+            - name: USE_X_FORWARDED_HOST
+              value: "1"
+            - name: PATH_PREFIX
+              value: ""
+            - name: LOG_LEVEL
+              value: INFO
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+              scheme: HTTP
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 250m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ddbmeme
+  labels:
+    app: ddbmeme
+spec:
+  selector:
+    app: ddbmeme
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ddbmeme
+  labels:
+    app: ddbmeme
+spec:
+  to:
+    kind: Service
+    name: ddbmeme
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
