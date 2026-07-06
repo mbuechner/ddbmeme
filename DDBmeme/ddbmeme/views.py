@@ -1,16 +1,11 @@
-import errno
 import json
 import urllib.parse
 import logging
 import requests
-import urllib3.exceptions
 from django.conf import settings
 from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from socket import error as SocketError
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.http import StreamingHttpResponse, HttpResponse
 from django.template.defaultfilters import slugify
 from django.urls import reverse
 from django.views.generic import CreateView
@@ -22,12 +17,8 @@ logger = logging.getLogger(__name__)
 
 # Module-level requests session with retries to reduce transient errors
 _session = requests.Session()
-try:
-    _retries = Retry(total=3, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=frozenset(["GET", "POST"]))
-except TypeError:
-    # older urllib3 uses method_whitelist
-    _retries = Retry(total=3, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504), method_whitelist=frozenset(["GET", "POST"]))
-adapter = HTTPAdapter(max_retries=_retries)
+_retry_total = int(getattr(settings, 'MEMEGEN_RETRY_TOTAL', 1))
+adapter = HTTPAdapter(max_retries=_retry_total)
 _session.mount('http://', adapter)
 _session.mount('https://', adapter)
 
@@ -135,26 +126,6 @@ def maketextmodel(request):
 
     return JsonResponse(data)
 
-def url2yield(url, chunksize=1024):
-    try:
-        # enable streaming with a configured timeout
-        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (10, 10))
-        response = _session.get(url, stream=True, timeout=timeout)
-        response.raise_for_status()
-
-        for chunk in response.iter_content(chunk_size=chunksize):
-            if not chunk:
-                break
-            yield chunk
-    except SocketError as e:
-        if e.errno != errno.ECONNRESET:
-            raise
-        logger.error("Socket connection reset while streaming %s: %s", url, e)
-    except (requests.RequestException, urllib3.exceptions.ProtocolError) as e:
-        logger.error("HTTP streaming failed for %s: %s", url, e)
-    except Exception as e:
-        logger.exception("Unexpected error while streaming %s: %s", url, e)
-
 def replacereserved(text):
     # Use a character-by-character mapping to avoid replacements colliding
     mapping = {
@@ -209,11 +180,13 @@ def makemememodel(request):
         # if the url was built with hardcoded base, replace it to respect settings
         if url.startswith('http://localhost:5001') or url.startswith('http://127.0.0.1:5001'):
             url = base + url[url.find('/images/custom/') :]
-        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (5, 20))
-        resp = _session.get(url, stream=True, timeout=timeout)
+        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (5, 45))
+        # Buffer image first so timeout/failure can return a clean HTTP status.
+        resp = _session.get(url, timeout=timeout)
         resp.raise_for_status()
+        image_bytes = resp.content
 
-        response = StreamingHttpResponse(resp.iter_content(chunk_size=8192), content_type="image/jpeg")
+        response = HttpResponse(image_bytes, content_type="image/jpeg")
 
         if download == 'true':
             response['Content-Disposition'] = 'attachment; filename="DDBmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'

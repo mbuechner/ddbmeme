@@ -47,6 +47,10 @@ spec:
               value: ""
             - name: LOG_LEVEL
               value: INFO
+            - name: MEMEGEN_TIMEOUT
+              value: "5,45"
+            - name: MEMEGEN_RETRY_TOTAL
+              value: "1"
           readinessProbe:
             httpGet:
               path: /healthz
