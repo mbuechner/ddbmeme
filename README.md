@@ -35,10 +35,10 @@ Open http://localhost:8080/ in your browser.
 | PATH_PREFIX          | Optional URL prefix such as `foo/bar/`. The UI is then available at `http://localhost:8080/foo/bar/`.                                                                          |
 | GUNICORN_WORKERS     | Optional number of Gunicorn worker processes for the Django app. Default: `2`.                                                                                                  |
 | GUNICORN_THREADS     | Optional number of Gunicorn threads per worker. Default: `4`.                                                                                                                    |
-| GUNICORN_TIMEOUT     | Optional Gunicorn request timeout in seconds. Default: `60`.                                                                                                                     |
+| GUNICORN_TIMEOUT     | Optional Gunicorn request timeout in seconds. Default: `180`.                                                                                                                    |
 | MEMEGEN_BASE_URL     | Optional base URL for the local meme generation service. Default: `http://localhost:5001`.                                                                                      |
-| MEMEGEN_TIMEOUT      | Optional memegen connect/read timeout as `connect,read` in seconds. Default: `5,45`.                                                                                             |
-| MEMEGEN_RETRY_TOTAL  | Optional retry count for memegen GET requests on transient failures and timeouts. Default: `1`.                                                                                 |
+| MEMEGEN_TIMEOUT      | Optional memegen connect/read timeout as `connect,read` in seconds. Default: `5,120`.                                                                                            |
+| MEMEGEN_RETRY_TOTAL  | Optional retry count for memegen GET requests on transient failures and timeouts. Default: `2`.                                                                                 |
 
 No DDB API key is required.
 

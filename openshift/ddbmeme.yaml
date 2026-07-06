@@ -47,10 +47,12 @@ spec:
               value: ""
             - name: LOG_LEVEL
               value: INFO
+            - name: GUNICORN_TIMEOUT
+              value: "180"
             - name: MEMEGEN_TIMEOUT
-              value: "5,45"
+              value: "5,120"
             - name: MEMEGEN_RETRY_TOTAL
-              value: "1"
+              value: "2"
           readinessProbe:
             httpGet:
               path: /healthz

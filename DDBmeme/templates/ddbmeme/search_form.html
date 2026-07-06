@@ -376,19 +376,31 @@
                     });
                     $img.on('error.ddbmeme', function () {
                         console.error('Image failed to load', data.url);
+                        $('#alert_message').html('<strong>Generation failed.</strong> The image service was too slow or unavailable. Please try again.');
+                        $('#alert').show();
                         $('#generate').prop('disabled', false).removeAttr('aria-busy');
                         $('#memeSpinner').addClass('d-none');
                     });
 
-                    // Fallback: if load doesn't fire within 15s, hide spinner
+                    // If generation is slow, keep waiting but inform the user.
                     setTimeout(function () {
                         if (!$('#memeSpinner').hasClass('d-none')) {
-                            console.warn('Image load timeout for', data.url);
-                            $('#generate').prop('disabled', false).removeAttr('aria-busy');
-                            $('#memeSpinner').addClass('d-none');
-                            updateSocialLinks();
+                            console.warn('Image generation is taking longer than expected', data.url);
+                            $('#alert_message').html('<strong>Please wait...</strong> Meme generation is taking longer than usual.');
+                            $('#alert').show();
                         }
                     }, 15000);
+
+                    // Hard client-side safety timeout to avoid hanging UI forever.
+                    setTimeout(function () {
+                        if (!$('#memeSpinner').hasClass('d-none')) {
+                            console.error('Image load hard-timeout for', data.url);
+                            $('#alert_message').html('<strong>Generation timeout.</strong> The image service did not answer in time. Please try again.');
+                            $('#alert').show();
+                            $('#generate').prop('disabled', false).removeAttr('aria-busy');
+                            $('#memeSpinner').addClass('d-none');
+                        }
+                    }, 190000);
 
                     // finally set the src to start loading the image
                     $img.attr('src', data.url);
