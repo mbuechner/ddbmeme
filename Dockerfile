@@ -1,4 +1,4 @@
-FROM python:3.14-alpine
+FROM python:3.13.14-alpine
 LABEL maintainer="Michael Büchner <m.buechner@dnb.de>"
 ARG MEMEGEN_GIT_HASH=285330c4aac902024f599e0faa44754481801991
 RUN apk add \
@@ -58,8 +58,8 @@ RUN apk add \
 
 WORKDIR /home/memegen
 
-ENV PIPENV_VENV_IN_PROJECT="enabled"
-ENV POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_VIRTUALENVS_CREATE=true
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 ENV RUN_USER=nobody
 ENV RUN_GROUP=65534
 
