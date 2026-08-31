@@ -61,7 +61,8 @@ WORKDIR /home/memegen
 ENV POETRY_VIRTUALENVS_CREATE=true
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 ENV RUN_USER=nobody
-ENV RUN_GROUP=65534
+# OpenShift runs containers with an arbitrary UID in group 0.
+ENV RUN_GROUP=0
 
 RUN chown -R ${RUN_USER}:${RUN_GROUP} . && \
 	python3 -m pip install --no-cache-dir poetry && \
@@ -77,7 +78,11 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt && \
 COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 RUN apk del --no-network .build-deps && \
-	touch /run/supervisord.pid && chown ${RUN_USER}:${RUN_USER} /run/supervisord.pid && chmod 664 /run/supervisord.pid;
+	touch /run/supervisord.pid && \
+	chown ${RUN_USER}:${RUN_GROUP} /run/supervisord.pid && \
+	chmod 664 /run/supervisord.pid && \
+	chgrp -R ${RUN_GROUP} /home/memegen /home/ddbmeme && \
+	chmod -R g=u /home/memegen /home/ddbmeme;
 
 # Run supervisord as nobody
 USER ${RUN_USER}
