@@ -1,214 +1,214 @@
 import json
-import urllib.parse
 import logging
+import re
+from threading import BoundedSemaphore, local
+from urllib.parse import quote, urlencode, urlsplit
+
 import requests
-from threading import BoundedSemaphore
 from django.conf import settings
-from requests.adapters import HTTPAdapter
-from django.http import HttpResponse
-from django.http import JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.template.defaultfilters import slugify
 from django.urls import reverse
-from django.views.generic import CreateView
-from django.http import HttpResponseBadRequest
-from ddbmeme.models import Search as SearchModel
+from django.views.decorators.http import require_GET, require_safe
+from requests.adapters import HTTPAdapter
 
-# logging is configured centrally in settings.py; use module logger
 logger = logging.getLogger(__name__)
 
-# Module-level requests session with retries to reduce transient errors
-_session = requests.Session()
-_retry_total = int(getattr(settings, 'MEMEGEN_RETRY_TOTAL', 1))
-adapter = HTTPAdapter(max_retries=_retry_total)
-_session.mount('http://', adapter)
-_session.mount('https://', adapter)
-_memegen_max_concurrency = max(1, int(getattr(settings, 'MEMEGEN_MAX_CONCURRENCY', 2)))
-_memegen_queue_wait_seconds = max(0, int(getattr(settings, 'MEMEGEN_QUEUE_WAIT_SECONDS', 30)))
-_memegen_semaphore = BoundedSemaphore(_memegen_max_concurrency)
+DDB_HOST = 'www.deutsche-digitale-bibliothek.de'
+DDB_API = 'https://api.deutsche-digitale-bibliothek.de/2/items'
+IIIF_HOST = 'iiif.deutsche-digitale-bibliothek.de'
+DEFAULT_IMAGE_URL = (
+    f'https://{IIIF_HOST}/image/2/5df8523e-7ee1-4aa6-b690-cb2c7580f13c/full/!800,600/0/default.jpg'
+)
+MAX_CAPTION_BYTES = 200
 
-class Search(CreateView):
-    model = SearchModel
-    fields = ('query', 'toptext', 'bottomtext',)
+CAPTION_ESCAPES = str.maketrans({
+    '_': '__',
+    ' ': '_',
+    '-': '--',
+    '?': '~q',
+    '&': '~a',
+    '%': '~p',
+    '#': '~h',
+    '/': '~s',
+    '\\': '~b',
+    '\n': '~n',
+    '<': '~l',
+    '>': '~g',
+    '"': "''",
+})
+
+_memegen_semaphore = BoundedSemaphore(settings.MEMEGEN_MAX_CONCURRENCY)
+_thread = local()
 
 
+def get_memegen_session():
+    # Each Gunicorn thread reuses its own connections and session state.
+    if not hasattr(_thread, 'memegen_session'):
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=settings.MEMEGEN_RETRY_TOTAL)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        _thread.memegen_session = session
+    return _thread.memegen_session
+
+
+@require_safe
 def health(request):
     return HttpResponse('ok', content_type='text/plain')
+
 
 def is_ajax(request):
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
+
+def get_ddb_item_id(url):
+    try:
+        parsed = urlsplit(url.strip())
+    except ValueError:
+        return None
+    if parsed.scheme == 'https' and parsed.netloc == DDB_HOST:
+        match = re.fullmatch(r'/item/([A-Z0-9]{32})/?', parsed.path, re.IGNORECASE | re.ASCII)
+        if match:
+            return match[1].upper()
+    return None
+
+
+def make_iiif_url(reference):
+    return f'https://{IIIF_HOST}/image/2/{quote(reference, safe="")}/full/!800,600/0/default.jpg'
+
+
+@require_GET
 def autocompletemodel(request):
     if not is_ajax(request):
-        return HttpResponseBadRequest("Only AJAX requests are allowed")
+        return HttpResponseBadRequest('Only AJAX requests are allowed')
 
-    query = request.GET.get('query', None)
-
-    data = {
-      'got': query
-    }
-
-    if (query is None) or not (len(query) == 81) or not query.startswith('https://www.deutsche-digitale-bibliothek.de/item/'):
-        data['message'] = '<strong>Example?</strong> Try something like this one: <a id="alert_example" href="#" class="alert-link" style="word-wrap:break-word;">https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4</a>'
-        return JsonResponse(data)
-
-    query = query.replace('/www.', '/api.')
-    query = query.replace('/item/', '/2/items/')
-
-    response = None
-    error_message = None
+    query = request.GET.get('query', '')
+    data = {'got': query}
+    item_id = get_ddb_item_id(query)
+    if item_id is None:
+        return JsonResponse({**data, 'message': 'Try this DDB object as an example.', 'show_example': True})
 
     try:
-        response = requests.get(query + '/binaries', headers={'Accept': 'application/json'}, timeout=10)
-    except requests.RequestException as e:
-        error_message = f"Request failed: {str(e)}"
-    except Exception as e:
-        error_message = f"Unexpected error: {str(e)}"
+        response = requests.get(
+            f'{DDB_API}/{item_id}/binaries',
+            headers={'Accept': 'application/json'},
+            timeout=10,
+            allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        logger.warning('DDB image lookup failed for %s: %s', item_id, exc)
+        return JsonResponse({**data, 'message': 'The DDB portal could not be reached. Please try again.'})
 
-    if response is None or response.status_code != 200:
-        error_code = response.status_code if response is not None else 'unknown'
-        if error_message:
-            data['message'] = f'<strong>Ohoh!</strong> {error_message}'
-        else:
-            data['message'] = f'<strong>Ohoh!</strong> I got the error {error_code} from DDB portal. :o('
-        return JsonResponse(data)
+    if response.status_code != 200:
+        logger.warning('DDB image lookup returned HTTP %s for %s', response.status_code, item_id)
+        return JsonResponse({**data, 'message': f'The DDB portal returned HTTP {response.status_code}.'})
 
     try:
-        j = json.loads(response.text)
-    except json.JSONDecodeError:
-        data['message'] = '<strong>Ohoh!</strong> Invalid response from DDB portal.'
-        return JsonResponse(data)
-    iiif_ulr_prefix = 'https://iiif.deutsche-digitale-bibliothek.de/image/2/'
-    iiif_url_suffix = '/full/!800,600/0/default.jpg'
+        payload = response.json()
+    except requests.exceptions.JSONDecodeError:
+        return JsonResponse({**data, 'message': 'The DDB portal returned an invalid response.'})
 
-    count = 0
+    binaries = payload.get('binary') if isinstance(payload, dict) else None
+    if isinstance(binaries, dict):
+        binaries = [binaries]
+    images = []
+    seen = set()
+    for binary in binaries if isinstance(binaries, list) else ():
+        reference = binary.get('ref') if isinstance(binary, dict) else None
+        if isinstance(reference, str) and reference and reference not in seen:
+            images.append({'uuid': reference, 'image': make_iiif_url(reference)})
+            seen.add(reference)
 
-    if j is not None and isinstance(j['binary'], list):
-        refs = []
-        for e in j['binary']:
-            count += 1
-            refs.append({
-                "uuid": e['ref'],
-                "image": iiif_ulr_prefix + e['ref'] + iiif_url_suffix,
-                })
-        data['images'] = json.dumps(refs)
-    elif j is not None:
-        count += 1
-        data['images'] = json.dumps([{
-            "uuid": j['binary']['ref'],
-            "image": iiif_ulr_prefix + j['binary']['ref'] + iiif_url_suffix,
-            }])
-    if count == 0:
-        data['message'] = 'This DDB object doesn\'t contain any pictures.'
-    elif count == 1:
-        data['message'] = str(count) + ' picture found.'
+    if images:
+        count = len(images)
+        data['message'] = '1 picture found.' if count == 1 else f'{count} pictures found.'
+        # Preserve the existing JSON-encoded images field for clients.
+        data['images'] = json.dumps(images)
     else:
-        data['message'] = str(count) + ' pictures found.'
-
+        data['message'] = "This DDB object doesn't contain any pictures."
     return JsonResponse(data)
 
-def maketextmodel(request):
-    if not is_ajax(request):
-        return HttpResponseBadRequest("Only AJAX requests are allowed")
-
-    toptext = replacereserved(request.GET.get('toptext', None))
-    bottomtext = replacereserved(request.GET.get('bottomtext', None))
-    image = request.GET.get('image', None)
-
-    base_url = request.build_absolute_uri(reverse('makemememodel'))
-    params = {
-        'alt': image,
-        'toptext': toptext,
-        'bottomtext': bottomtext,
-    }
-    query_string = urllib.parse.urlencode(params)
-    url = f"{base_url}?{query_string}"
-
-    data = {
-        'url': url,
-        'download': f"{url}&download=true"
-    }
-
-    return JsonResponse(data)
 
 def replacereserved(text):
-    # Use a character-by-character mapping to avoid replacements colliding
-    mapping = {
-        '_': '__',
-        ' ': '_',
-        '-': '--',
-        '?': '~q',
-        '&': '~a',
-        '%': '~p',
-        '#': '~h',
-        '/': '~s',
-        '\\': '~b',
-        '<': '~l',
-        '>': '~g',
-        '"': "''",
-    }
-    # Build result by mapping each original character once
-    parts = []
-    for ch in text:
-        parts.append(mapping.get(ch, ch))
-    return ''.join(parts)
+    return text.translate(CAPTION_ESCAPES)
 
-def makemememodel(request):
-    image_url = request.GET.get('alt', 'https://iiif.deutsche-digitale-bibliothek.de/image/2/5df8523e-7ee1-4aa6-b690-cb2c7580f13c/full/!800,600/0/default.jpg')
 
-    if not image_url.startswith('https://iiif.deutsche-digitale-bibliothek.de/image/'):
-        image_url = 'https://iiif.deutsche-digitale-bibliothek.de/image/2/5df8523e-7ee1-4aa6-b690-cb2c7580f13c/full/!800,600/0/default.jpg'
+def caption_error(toptext, bottomtext):
+    if not toptext.strip() and not bottomtext.strip():
+        return 'Top text or bottom text is required'
+    if max(len(toptext.encode('utf-8')), len(bottomtext.encode('utf-8'))) > MAX_CAPTION_BYTES:
+        return 'A caption is too long after encoding. Please shorten it.'
+    return None
+
+
+@require_GET
+def maketextmodel(request):
+    if not is_ajax(request):
+        return HttpResponseBadRequest('Only AJAX requests are allowed')
 
     toptext = request.GET.get('toptext', '')
     bottomtext = request.GET.get('bottomtext', '')
-    download = request.GET.get('download', 'false')
+    top = replacereserved(toptext) if toptext.strip() else ''
+    bottom = replacereserved(bottomtext) if bottomtext.strip() else ''
+    if error := caption_error(top, bottom):
+        return JsonResponse({'message': error}, status=400)
 
-    if len(image_url) <= 0:
-        return HttpResponseBadRequest("Invalid image URL")
+    base_url = request.build_absolute_uri(reverse('makemememodel'))
+    query = urlencode({'alt': request.GET.get('image', ''), 'toptext': top, 'bottomtext': bottom})
+    url = f'{base_url}?{query}'
+    return JsonResponse({'url': url, 'download': f'{url}&download=true'})
 
-    if len(toptext) <= 0 and len(bottomtext) <= 0:
-        return HttpResponseBadRequest("Top text or bottom text is required")
 
-    # service could running locally under port 5001
-    url = 'http://localhost:5001/images/custom/'
-    if len(toptext) > 0:
-        url += urllib.parse.quote_plus(toptext) + '/'
-    else:
-        url += '_/'
-    if len(bottomtext) > 0:
-        url += urllib.parse.quote_plus(bottomtext) + '/'
-    url = url[:-1] + '.jpg?background=' + urllib.parse.quote_plus(image_url)
+def get_background_url(url):
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return DEFAULT_IMAGE_URL
+    if parsed.scheme == 'https' and parsed.netloc == IIIF_HOST and parsed.path.startswith('/image/'):
+        return url
+    return DEFAULT_IMAGE_URL
 
-    acquired = _memegen_semaphore.acquire(timeout=_memegen_queue_wait_seconds)
-    if not acquired:
-        logger.warning("Memegen busy: concurrency limit reached")
-        return HttpResponse("Image service is busy, please retry in a moment", status=503)
+
+@require_safe
+def makemememodel(request):
+    toptext = request.GET.get('toptext', '')
+    bottomtext = request.GET.get('bottomtext', '')
+    if error := caption_error(toptext, bottomtext):
+        return HttpResponseBadRequest(error)
+
+    image_url = get_background_url(request.GET.get('alt', ''))
+    # Preserve literal dots when the first caption would otherwise be a URL dot segment.
+    top_segment = f'{toptext}_' if toptext in ('.', '..') else toptext
+    top = quote(top_segment or '_', safe='')
+    bottom = quote(bottomtext or '_', safe='')
+    base = settings.MEMEGEN_BASE_URL.rstrip('/')
+    url = f'{base}/images/custom/{top}/{bottom}.jpg'
+
+    if not _memegen_semaphore.acquire(timeout=settings.MEMEGEN_QUEUE_WAIT_SECONDS):
+        logger.warning('Memegen busy: concurrency limit reached')
+        return HttpResponse('Image service is busy, please retry in a moment', status=503)
 
     try:
-        # request the generated image from the memegen service using module session + configured timeouts
-        base = getattr(settings, 'MEMEGEN_BASE_URL', 'http://localhost:5001').rstrip('/')
-        # if the url was built with hardcoded base, replace it to respect settings
-        if url.startswith('http://localhost:5001') or url.startswith('http://127.0.0.1:5001'):
-            url = base + url[url.find('/images/custom/') :]
-        timeout = getattr(settings, 'MEMEGEN_TIMEOUT', (5, 180))
-        # Buffer image first so timeout/failure can return a clean HTTP status.
-        resp = _session.get(url, timeout=timeout)
-        resp.raise_for_status()
-        image_bytes = resp.content
+        result = get_memegen_session().get(
+            url, params={'background': image_url}, timeout=settings.MEMEGEN_TIMEOUT,
+        )
+        result.raise_for_status()
+        media_type = result.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+        if media_type != 'image/jpeg' or not result.content:
+            logger.warning('Memegen returned a response without a JPEG image')
+            return HttpResponse('Image generation failed', status=502)
 
-        response = HttpResponse(image_bytes, content_type="image/jpeg")
-
-        if download == 'true':
-            response['Content-Disposition'] = 'attachment; filename="DDBmeme-' + slugify(toptext + '_' + bottomtext) + '.jpg"'
-
+        response = HttpResponse(result.content, content_type='image/jpeg')
+        if request.GET.get('download') == 'true':
+            filename = slugify(f'{toptext}_{bottomtext}')
+            response['Content-Disposition'] = f'attachment; filename="DDBmeme-{filename}.jpg"'
         return response
-    except requests.Timeout as e:
-        logger.error("Memegen timeout for %s: %s", url, e)
-        return HttpResponse("Image generation timed out", status=504)
-    except requests.RequestException as e:
-        logger.error("Memegen request failed for %s: %s", url, e)
-        return HttpResponse("Image generation failed", status=502)
-    except Exception as e:
-        logger.exception("Unexpected error contacting memegen for %s: %s", url, e)
-        return HttpResponse("Internal error", status=500)
+    except requests.Timeout:
+        logger.warning('Memegen timed out while generating an image')
+        return HttpResponse('Image generation timed out', status=504)
+    except requests.RequestException as exc:
+        logger.warning('Memegen request failed (%s)', type(exc).__name__)
+        return HttpResponse('Image generation failed', status=502)
     finally:
         _memegen_semaphore.release()

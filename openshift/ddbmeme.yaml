@@ -1,11 +1,3 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ddbmeme-secret
-type: Opaque
-stringData:
-  SECRET_KEY: change-me-to-a-random-secret
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,10 +14,12 @@ spec:
       labels:
         app: ddbmeme
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: ddbmeme
-          image: ghcr.io/mbuechner/ddbmeme/ddbmeme:latest
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/mbuechner/ddbmeme:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -35,8 +29,9 @@ spec:
                 secretKeyRef:
                   name: ddbmeme-secret
                   key: SECRET_KEY
-            - name: ALLOW_ALL_HOSTS
-              value: "1"
+            - name: ALLOWED_HOSTS
+              # Keep localhost for the probes and set the hostname assigned to the Route.
+              value: "localhost,ddbmeme.apps.example.org"
             - name: USE_X_FORWARDED_HOST
               value: "1"
             - name: HOME
@@ -69,19 +64,14 @@ spec:
               value: "200"
             - name: MEMEGEN_MAX_REQUESTS_JITTER
               value: "30"
-            - name: WEB_CONCURRENCY
-              value: "1"
-            - name: MAX_REQUESTS
-              value: "200"
-            - name: MAX_REQUESTS_JITTER
-              value: "30"
-            - name: TIMEOUT
-              value: "180"
           readinessProbe:
             httpGet:
               path: /healthz
               port: 8080
               scheme: HTTP
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
@@ -92,6 +82,9 @@ spec:
               path: /healthz
               port: 8080
               scheme: HTTP
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 30
             periodSeconds: 20
             timeoutSeconds: 3
@@ -102,6 +95,9 @@ spec:
               path: /healthz
               port: 8080
               scheme: HTTP
+              httpHeaders:
+                - name: Host
+                  value: localhost
             periodSeconds: 10
             timeoutSeconds: 3
             successThreshold: 1
@@ -141,6 +137,8 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: ddbmeme
+  annotations:
+    haproxy.router.openshift.io/set-forwarded-headers: replace
   labels:
     app: ddbmeme
 spec:

@@ -2,455 +2,387 @@
 
 {% block javascript %}
 <script>
-    var alertClone;
-    var placeholderText;
-    var skipNextArchiveSave = false; // prevent auto-generated memes from being archived
-
-    var updateSocialLinks = function () {
-        var downloadLink = $('.carousel-inner > .active img').attr('data-src-download');
-        $('#saveBtn').attr('href', downloadLink);
-        // Prefer the full image URL stored in data-src, fall back to displayed src
-        var link = $('.carousel-inner > .active img').attr('data-src') || $('.carousel-inner > .active img').attr('src');
-        $('#linkToMeme').val(link);
-        $('#facebookBtn').attr('href', 'https://www.facebook.com/sharer/sharer.php?p[url]=' + encodeURI(link));
-        $('#twitterBtn').attr('href', 'https://x.com/share?url=' + encodeURI(link));
-    }
-
-    // Meme Archive (localStorage)
     const ARCHIVE_KEY = 'ddbmeme_archive_v2';
-    const ARCHIVE_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23e9ecef'/%3E%3C/svg%3E";
+    const $query = $('#id_query');
+    const $top = $('#id_toptext');
+    const $bottom = $('#id_bottomtext');
+    const $source = $('#id_image');
+    const $alert = $('#alert_message');
+    const $slides = $('#carouselIndicators .carousel-inner');
+    const $indicators = $('#carouselIndicators .carousel-indicators');
+    const welcome = $alert.contents().clone();
+    const meme = bootstrap.Collapse.getOrCreateInstance(document.getElementById('meme'), { toggle: false });
+    let lookupTimer;
+    let lookupRequest;
+    let generation;
 
-    // Create a resized thumbnail (data URL) from an <img> element using canvas.
-    function createThumbnail(imgEl, maxWidth) {
-        return new Promise(function (resolve, reject) {
-            try {
-                var img = imgEl instanceof HTMLImageElement ? imgEl : new Image();
-                var created = false;
-                if (!(imgEl instanceof HTMLImageElement)) {
-                    img.crossOrigin = 'Anonymous';
-                    img.src = imgEl;
-                    created = true;
-                }
-
-                var doCreate = function () {
-                    try {
-                        var canvas = document.createElement('canvas');
-                        var ratio = img.width > 0 ? Math.min(1, maxWidth / img.width) : 1;
-                        canvas.width = Math.max(1, Math.round(img.width * ratio));
-                        canvas.height = Math.max(1, Math.round(img.height * ratio));
-                        var ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                        resolve(dataUrl);
-                    } catch (err) {
-                        reject(err);
-                    }
-                };
-
-                if (img.complete && img.naturalWidth) {
-                    doCreate();
-                } else {
-                    img.onload = function () { doCreate(); };
-                    img.onerror = function (e) { reject(e || new Error('Image load error')); };
-                }
-            } catch (err) {
-                reject(err);
-            }
-        });
+    function httpUrl(value) {
+        if (typeof value !== 'string' || !value) {
+            return '';
+        }
+        try {
+            const url = new URL(value, window.location.href);
+            return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+        } catch {
+            return '';
+        }
     }
 
-    function getArchive() {
+    function showWelcome() {
+        $alert.empty().append(welcome.clone());
+    }
+
+    function showMessage(message, showExample = false) {
+        $alert.text(message);
+        if (showExample) {
+            const example = $query.attr('placeholder');
+            $('<a>').attr({ id: 'alert_example', href: example }).addClass('alert-link')
+                .text(example).on('click', function (event) {
+                    event.preventDefault();
+                    $query.val(example).trigger('input');
+                }).appendTo($alert.append(' '));
+        }
+    }
+
+    function activeImage() {
+        return $slides.find('.carousel-item.active img');
+    }
+
+    function updateLinks() {
+        const $image = activeImage();
+        const source = $image.attr('data-source') || '';
+        const share = $image.attr('data-share') || source;
+        const download = $image.attr('data-download') || share;
+        $source.val(source);
+        $('#linkToMeme').val(share);
+        $('#saveBtn').attr('href', download || null);
+        $('#facebookBtn').attr('href', share ? 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share) : null);
+        $('#twitterBtn').attr('href', share ? 'https://x.com/share?url=' + encodeURIComponent(share) : null);
+    }
+
+    function archiveThumb(entry) {
+        if (typeof entry.image !== 'string') {
+            return '';
+        }
+        return /^data:image\/jpeg;base64,/i.test(entry.image) ? entry.image : httpUrl(entry.image);
+    }
+
+    function loadArchive() {
         try {
-            const raw = localStorage.getItem(ARCHIVE_KEY);
-            return raw ? JSON.parse(raw) : [];
-        } catch (e) {
-            console.warn('Archive parse failed', e);
+            const items = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]');
+            return Array.isArray(items) ? items.filter(function (entry) {
+                return entry && httpUrl(entry.url);
+            }) : [];
+        } catch {
             return [];
         }
     }
 
-    function setArchive(items) {
+    let archive = loadArchive();
+
+    function writeArchive() {
         try {
-            localStorage.setItem(ARCHIVE_KEY, JSON.stringify(items));
-        } catch (e) {
-            console.warn('Archive save failed', e);
+            localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive));
+        } catch {
+            showMessage('The browser could not save the latest change to your archive.');
         }
     }
 
-    function appendArchiveItem(item) {
-        var $grid = $('#archiveGrid');
-        if (!$grid.length) return;
-        var altText = (item.toptext || '') + (item.bottomtext ? (' / ' + item.bottomtext) : '');
-        var col = `
-                <div class="col">
-                    <div class="card archive-card position-relative placeholder-glow" data-id="${item.id || ''}" data-url="${item.url}" data-download="${item.download || ''}" data-toptext="${(item.toptext || '').replace(/\"/g, '&quot;')}" data-bottomtext="${(item.bottomtext || '').replace(/\"/g, '&quot;')}" data-image="${(item.image || '').replace(/\"/g, '&quot;')}" data-query="${(item.query || '').replace(/\"/g, '&quot;')}" data-uuid="${(item.uuid || '').replace(/\"/g, '&quot;')}">
-                        <button type="button" class="btn btn-sm btn-outline-secondary archive-delete position-absolute top-0 end-0 m-1" data-id="${item.id || ''}" title="Delete" aria-label="Delete thumbnail" style="width:1.6rem;height:1.6rem;padding:0;display:flex;align-items:center;justify-content:center;font-size:0.85rem;border-radius:0.45rem;opacity:0.85;">&times;</button>
-                        <img src="${item.image || item.url}" loading="lazy" class="card-img-top archive-thumb" alt="${altText}">
-                    </div>
-                </div>`;
-        $grid.prepend(col);
+    function caption(entry) {
+        return [entry.toptext, entry.bottomtext].filter(function (text) {
+            return typeof text === 'string' && text.length;
+        }).join(' / ') || 'Meme';
     }
 
-    function renderArchive(items) {
-        var $grid = $('#archiveGrid');
-        if (!$grid.length) return;
-        $grid.empty();
-        var modified = false;
-        for (var i = 0; i < items.length; i++) {
-            var it = items[i];
-            if (!it.id) { it.id = Date.now() + i; modified = true; }
-            appendArchiveItem(it);
-        }
-        if (modified) { setArchive(items); }
+    function appendArchiveItem(entry) {
+        const $card = $('<div>').addClass('card archive-card position-relative').data('entry', entry);
+        const $open = $('<button>').attr({ type: 'button', 'aria-label': 'Restore meme: ' + caption(entry) })
+            .addClass('w-100 border-0 bg-transparent p-0');
+        $('<img>').attr({ src: archiveThumb(entry) || httpUrl(entry.url), alt: '', loading: 'lazy' })
+            .addClass('card-img-top archive-thumb').appendTo($open);
+        const $remove = $('<button>').attr({ type: 'button', title: 'Delete', 'aria-label': 'Delete thumbnail' })
+            .addClass('btn btn-sm btn-outline-secondary archive-delete position-absolute top-0 end-0 m-1')
+            .css({ width: '1.6rem', height: '1.6rem', padding: 0 }).text('×');
+        $('#archiveGrid').prepend($('<div>').addClass('col').append($card.append($open, $remove)));
     }
 
-    function saveToArchive(entry) {
-        // Try to create and store a local thumbnail to avoid future API loads.
-        if (!entry.id) { entry.id = Date.now(); }
-        var $img = $('.carousel-inner > .active img');
-        var thumbPromise = Promise.resolve(null);
-        if ($img.length) {
-            try {
-                thumbPromise = createThumbnail($img[0], 400).catch(function (err) { console.warn('Thumbnail creation failed', err); return null; });
-            } catch (err) {
-                thumbPromise = Promise.resolve(null);
-            }
-        }
-        thumbPromise.then(function (dataUrl) {
-            if (dataUrl) { entry.image = dataUrl; }
-            var items = getArchive();
-            items.push(entry);
-            setArchive(items);
-            appendArchiveItem(entry);
-        });
-    }
-
-    function clearArchive() {
-        setArchive([]);
-        $('#archiveGrid').empty();
-    }
-
-    var alertParent = null;
-    $(document).ready(function () {
-        alertClone = $("#alert").clone();
-        alertParent = $("#alert").parent();
-        placeholderText = $('#id_query').attr('placeholder');
-
-        if ($("#id_query").val().length > 0) {
-            $("#id_query").trigger("input");
-        }
-        $('#id_query').focus(function () {
-            $(this).removeAttr('placeholder');
-        });
-        $('#id_query').focusout(function () {
-            $(this).attr('placeholder', placeholderText);
-        });
-    });
-
-    // Ensure the welcome alert is always present: when any alert is about to be closed
-    // insert the welcome clone before the closing element to avoid a state without an alert.
-    $(document).on('close.bs.alert', '.alert', function (e) {
+    function saveToArchive(entry, image) {
+        const scale = Math.min(1, 400 / Math.max(image.naturalWidth, image.naturalHeight));
         try {
-            // If there is currently no #alert, or the alert being closed IS the #alert,
-            // insert the welcome clone before the closing element so there is never
-            // a moment without an alert visible.
-            if (( $('#alert').length === 0 || $(this).is('#alert') ) && alertClone) {
-                $(this).before(alertClone.clone());
-            }
-        } catch (err) {
-            console.warn('Could not restore welcome alert', err);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+            entry.image = canvas.toDataURL('image/jpeg', 0.8);
+        } catch {
+            // Keep the full-size meme link when a thumbnail cannot be created.
         }
-    });
+        archive.push(entry);
+        writeArchive();
+        appendArchiveItem(entry);
+    }
 
-    // Load archive on ready
-    $(function () {
-        renderArchive(getArchive());
-    });
-
-    // Clear archive button
-    $(document).on('click', '#clearArchive', function (e) {
-        e.preventDefault();
-        clearArchive();
-    });
-
-    // Delete single archive item
-    $(document).on('click', '.archive-delete', function (e) {
-        e.stopPropagation();
-        var id = $(this).data('id');
-        if (!id) { return; }
-        var items = getArchive();
-        var newItems = items.filter(function (it) { return String(it.id) !== String(id); });
-        setArchive(newItems);
-        // remove card from DOM
-        $(this).closest('.col').remove();
-    });
-
-    // Restore from archive
-    $(document).on('click', '.archive-card', function () {
-        var $card = $(this);
-        var url = $card.data('url');
-        var download = $card.data('download');
-        var toptext = $card.data('toptext') || '';
-        var bottomtext = $card.data('bottomtext') || '';
-        var image = $card.data('image') || '';
-        var uuid = $card.data('uuid') || '';
-        var query = $card.data('query') || '';
-
-        $('#id_toptext').val(toptext);
-        $('#id_bottomtext').val(bottomtext);
-        if (image) { $('#id_image').val(image); }
-
-        if ($('.carousel-inner .carousel-item').length === 0) {
-            $('.carousel-inner').append('<div class="carousel-item active"><img class="d-block w-100 rounded-0" src="' + (image || ARCHIVE_PLACEHOLDER) + '" alt="Meme"></div>');
-        }
-        var $img = $('.carousel-inner > .active img');
-        // Use local thumbnail for preview when available, but keep the full image URL on data-src for downloads/links
-        if (image) {
-            $img.attr('src', image);
-            $img.attr('data-src', url);
-        } else {
-            $img.attr('src', url);
-        }
-        if (download) { $img.attr('data-src-download', download); }
-
-        $('#meme').collapse('show');
-        updateSocialLinks();
-
-        // Close offcanvas after selecting an item
-        var offc = document.getElementById('offcanvasArchive');
-        if (offc && window.bootstrap && bootstrap.Offcanvas) {
-            var oc = bootstrap.Offcanvas.getOrCreateInstance(offc);
-            oc.hide();
-        }
-
-        // Also populate the search URL and trigger image reload, then auto-generate
-        if (query) {
-            // After images load via search, select the saved image, then generate once (without archiving)
-            $(document).one('ddb:imagesLoaded', function () {
-                if (uuid || image) {
-                    var el = document.getElementById('carouselIndicators');
-                    var targetIndex = -1;
-                    $('.carousel-inner .carousel-item').each(function (idx) {
-                        var $im = $(this).find('img');
-                        var ds = $im.attr('data-src');
-                        var a = $im.attr('alt');
-                        if ((uuid && a === uuid) || (!uuid && image && ds === image)) { targetIndex = idx; return false; }
-                    });
-                    if (targetIndex >= 0) {
-                        if (el && window.bootstrap && bootstrap.Carousel) {
-                            var carousel = bootstrap.Carousel.getOrCreateInstance(el);
-                            carousel.to(targetIndex);
-                        } else {
-                            $('.carousel-inner .carousel-item').removeClass('active').eq(targetIndex).addClass('active');
-                            $('.carousel-indicators button').removeClass('active').removeAttr('aria-current').eq(targetIndex).addClass('active').attr('aria-current','true');
-                        }
-                        var chosen = $('.carousel-inner .carousel-item').eq(targetIndex).find('img').attr('data-src');
-                        if (chosen) { $('#id_image').val(chosen); }
-                        updateSocialLinks();
-                    }
-                }
-                skipNextArchiveSave = true;
-                $('#generate').trigger('click');
+    function showSlides(images, selected = 0) {
+        $slides.empty();
+        $indicators.empty();
+        images.forEach(function (item, index) {
+            const active = index === selected;
+            const $image = $('<img>').addClass('d-block w-100 rounded-0').attr({
+                src: item.preview || item.image,
+                alt: item.alt || 'DDB image',
+                'data-source': item.image,
+                'data-uuid': item.uuid || '',
+                'data-share': item.share || '',
+                'data-download': item.download || ''
             });
-            $('#id_query').val(query).trigger('input');
+            $('<div>').addClass('carousel-item').toggleClass('active', active).append($image).appendTo($slides);
+            $('<button>').attr({
+                type: 'button', 'data-bs-target': '#carouselIndicators', 'data-bs-slide-to': index,
+                'aria-label': 'Slide ' + (index + 1), 'aria-current': active ? 'true' : null
+            }).toggleClass('active', active).appendTo($indicators);
+        });
+        $('#carouselIndicators .carousel-control-prev, #carouselIndicators .carousel-control-next')
+            .add($indicators).toggle(images.length > 1);
+        updateLinks();
+        if (images.length) {
+            meme.show();
         } else {
-            // No DDB URL stored: generate immediately with current image + texts (without archiving)
-            skipNextArchiveSave = true;
-            $('#generate').trigger('click');
+            meme.hide();
         }
-    });
-
-    $('#search').on('keyup keypress', function (e) {
-        var keyCode = e.keyCode || e.which;
-        if (keyCode === 13) {
-            e.preventDefault();
-            return false;
-        }
-    });
-    // Simple debounce helper to reduce server calls while typing
-    function debounce(func, wait) {
-        var timeout;
-        return function () {
-            var context = this, args = arguments;
-            clearTimeout(timeout);
-            timeout = setTimeout(function () {
-                func.apply(context, args);
-            }, wait);
-        };
     }
 
-    // The actual handler for query input (debounced)
-    var handleQueryInput = function () {
-        if ($("#id_query").val().length <= 0) {
-            $("#alert").replaceWith(alertClone.clone());
+    function cancelLookup() {
+        clearTimeout(lookupTimer);
+        const request = lookupRequest;
+        lookupRequest = null;
+        if (request) {
+            request.abort();
+        }
+    }
+
+    function startLookup(restored = null) {
+        const query = $query.val().trim();
+        if (!query) {
             return;
         }
-        var form = $(this).closest("form");
-        $.ajax({
-            url: form.attr("data-validate-query-url"),
-            data: form.serialize(),
+        const request = $.ajax({
+            url: $('#search').attr('data-validate-query-url'),
+            data: { query: query },
             dataType: 'json',
+            timeout: 12000,
             success: function (data) {
-                if (data.message) {
-                    $("#alert_message").html(data.message);
-                    $('#alert').show();
-                    $("#alert_example").click(function () {
-                        $("#id_query").val($("#alert_example").text());
-                        $("#id_query").trigger("input");
-                    });
+                if (lookupRequest !== request) {
+                    return;
                 }
-                if (data.images) {
-                    $(".carousel-inner").empty();
-                    $(".carousel-indicators").empty();
-                    $json = JSON.parse(data.images);
-                    if ($json.length > 1) {
-                        $('.carousel-control-prev, .carousel-control-next, .carousel-indicators').show();
-                    } else {
-                        $('.carousel-control-prev, .carousel-control-next, .carousel-indicators').hide();
-                    }
-                    $.each($json, function (key, value) {
-                        $(".carousel-inner").append('<div class="carousel-item"><img class="d-block w-100 rounded-0" data-src-download="' + value['image'] + '" data-src="' + value['image'] + '" src="' + value['image'] + '" alt="' + value['uuid'] + '"></div>');
-                        $(".carousel-indicators").append('<button type="button" data-bs-target="#carouselIndicators" data-bs-slide-to="' + key + '" aria-label="Slide ' + (key + 1) + '"></button>');
-                    });
-                    $('.carousel-inner > .carousel-item').first().addClass('active');
-                    $('.carousel-indicators > button').first().addClass('active').attr('aria-current', 'true');
-                    $('#id_image').val($('.carousel-inner > .active img').attr('data-src'));
-                    // Carousel uses Bootstrap data attributes; no manual init needed
-                    $('#meme').collapse('show');
-
-                    updateSocialLinks();
-
-                    // Signal that images finished loading to enable chained actions (e.g., auto-generate)
-                    $(document).trigger('ddb:imagesLoaded');
+                showMessage(data.message, data.show_example);
+                if (!data.images) {
+                    return;
                 }
-            }
-        });
-    };
-
-    // Bind the debounced handler (300ms)
-    $("#id_query").on('input', debounce(handleQueryInput, 300));
-
-    $("#generate").click(function () {
-        if ($('#id_toptext').val().length === 0 && $('#id_bottomtext').val().length === 0) {
-            return;
-        }
-        var form = $(this).closest("form");
-        $.ajax({
-            url: form.attr("data-validate-query-url"),
-            data: form.serialize(),
-            dataType: 'json',
-            beforeSend: function () {
-                $('#generate').prop('disabled', true).attr('aria-busy', 'true');
-                $('#memeSpinner').removeClass('d-none');
-            },
-            success: function (data) {
-                if (data.url) {
-                    // update attributes needed for links first
-                    $('.carousel-inner > .active img').attr('data-src-download', data.download);
-
-
-
-                    // Ensure spinner remains visible until the new image actually finishes loading
-                    var $img = $('.carousel-inner > .active img');
-                    // remove any previous handlers
-                    $img.off('.ddbmeme');
-
-                    // Attach handlers BEFORE changing src to reliably catch the load event
-                    $img.on('load.ddbmeme', function () {
-                        $('#generate').prop('disabled', false).removeAttr('aria-busy');
-                        $('#memeSpinner').addClass('d-none');
-                        updateSocialLinks();
-                        // Save to archive only when user explicitly generated (after image fully loaded)
-                        if (!skipNextArchiveSave) {
-                            saveToArchive({
-                                url: data.url,
-                                download: data.download,
-                                toptext: $('#id_toptext').val(),
-                                bottomtext: $('#id_bottomtext').val(),
-                                query: $('#id_query').val(),
-                                uuid: $img.attr('alt') || ''
-                            });
-                        }
-                        // reset flag after handling one generate
-                        skipNextArchiveSave = false;
-                    });
-                    $img.on('error.ddbmeme', function () {
-                        console.error('Image failed to load', data.url);
-                        $('#alert_message').html('<strong>Generation failed.</strong> The image service was too slow or unavailable. Please try again.');
-                        $('#alert').show();
-                        $('#generate').prop('disabled', false).removeAttr('aria-busy');
-                        $('#memeSpinner').addClass('d-none');
-                    });
-
-                    // If generation is slow, keep waiting but inform the user.
-                    setTimeout(function () {
-                        if (!$('#memeSpinner').hasClass('d-none')) {
-                            console.warn('Image generation is taking longer than expected', data.url);
-                            $('#alert_message').html('<strong>Please wait...</strong> Meme generation is taking longer than usual.');
-                            $('#alert').show();
-                        }
-                    }, 15000);
-
-                    // Hard client-side safety timeout to avoid hanging UI forever.
-                    setTimeout(function () {
-                        if (!$('#memeSpinner').hasClass('d-none')) {
-                            console.error('Image load hard-timeout for', data.url);
-                            $('#alert_message').html('<strong>Generation timeout.</strong> The image service did not answer in time. Please try again.');
-                            $('#alert').show();
-                            $('#generate').prop('disabled', false).removeAttr('aria-busy');
-                            $('#memeSpinner').addClass('d-none');
-                        }
-                    }, 190000);
-
-                    // finally set the src to start loading the image
-                    $img.attr('src', data.url);
-                    // also update social/download links immediately if needed
-                    updateSocialLinks();
+                const images = JSON.parse(data.images);
+                if (!restored) {
+                    showSlides(images);
+                    return;
+                }
+                const selected = images.findIndex(function (item) {
+                    return item.image === restored.image || (restored.uuid && item.uuid === restored.uuid);
+                });
+                if (selected >= 0) {
+                    images[selected] = { ...images[selected], ...restored, image: images[selected].image };
+                    showSlides(images, selected);
                 }
             },
-            error: function (jqXHR, textStatus, err) {
-                console.error('Generate request failed', textStatus, err);
-                // make sure spinner/button state is reset on ajax error
-                $('#generate').prop('disabled', false).removeAttr('aria-busy');
-                $('#memeSpinner').addClass('d-none');
+            error: function () {
+                if (lookupRequest === request) {
+                    showMessage('The images could not be loaded. Please try again.');
+                }
             },
             complete: function () {
-                // Do not hide the spinner here — wait for image load event instead.
+                if (lookupRequest === request) {
+                    lookupRequest = null;
+                }
+            }
+        });
+        lookupRequest = request;
+    }
+
+    function finishGeneration(run) {
+        if (generation !== run) {
+            return false;
+        }
+        generation = null;
+        clearTimeout(run.slowTimer);
+        clearTimeout(run.deadline);
+        if (run.request && run.request.readyState !== 4) {
+            run.request.abort();
+        }
+        if (run.image) {
+            run.image.onload = null;
+            run.image.onerror = null;
+        }
+        $('#generate').prop('disabled', false).removeAttr('aria-busy');
+        $('#memeSpinner').addClass('d-none');
+        return true;
+    }
+
+    function cancelGeneration() {
+        const run = generation;
+        if (run && finishGeneration(run) && run.image) {
+            run.image.removeAttribute('src');
+        }
+    }
+
+    function failGeneration(run, message) {
+        if (generation === run) {
+            cancelGeneration();
+            showMessage(message);
+        }
+    }
+
+    $('#make').on('submit', function (event) {
+        event.preventDefault();
+        const $image = activeImage();
+        const entry = {
+            toptext: $top.val(), bottomtext: $bottom.val(), query: $query.val(),
+            source: $source.val(), uuid: $image.attr('data-uuid')
+        };
+        if (generation || !$image.length || (!entry.toptext.trim() && !entry.bottomtext.trim())) {
+            return;
+        }
+
+        cancelLookup();
+        const run = {};
+        generation = run;
+        $('#generate').prop('disabled', true).attr('aria-busy', 'true');
+        $('#memeSpinner').removeClass('d-none');
+        run.slowTimer = setTimeout(function () {
+            run.slow = true;
+            showMessage('Meme generation is taking longer than usual. Please wait.');
+        }, 15000);
+        run.deadline = setTimeout(function () {
+            failGeneration(run, 'The image service did not answer in time. Please try again.');
+        }, 190000);
+        run.request = $.ajax({
+            url: $(this).attr('data-validate-query-url'),
+            data: { toptext: entry.toptext, bottomtext: entry.bottomtext, image: entry.source },
+            dataType: 'json',
+            timeout: 10000,
+            success: function (data) {
+                if (generation !== run) {
+                    return;
+                }
+                entry.url = httpUrl(data.url);
+                entry.download = httpUrl(data.download);
+                if (!entry.url) {
+                    failGeneration(run, 'The image service did not provide a meme link.');
+                    return;
+                }
+                run.image = new Image();
+                run.image.onload = function () {
+                    if (!finishGeneration(run)) {
+                        return;
+                    }
+                    $(run.image).addClass('d-block w-100 rounded-0').attr({
+                        alt: caption(entry), 'data-source': entry.source, 'data-uuid': entry.uuid,
+                        'data-share': entry.url, 'data-download': entry.download
+                    });
+                    $image.replaceWith(run.image);
+                    updateLinks();
+                    if (run.slow) {
+                        showWelcome();
+                    }
+                    saveToArchive(entry, run.image);
+                };
+                run.image.onerror = function () {
+                    failGeneration(run, 'The image service could not generate the meme. Please try again.');
+                };
+                run.image.src = entry.url;
+            },
+            error: function (xhr) {
+                failGeneration(run, xhr.responseJSON?.message || 'Meme generation failed. Please try again.');
             }
         });
     });
 
-    $("#reset").click(function () {
-        $('#id_toptext').val('');
-        $('#id_bottomtext').val('');
-        $("#id_query").trigger("input");
+    function search(delay) {
+        cancelLookup();
+        cancelGeneration();
+        showSlides([]);
+        showWelcome();
+        if ($query.val().trim()) {
+            lookupTimer = setTimeout(startLookup, delay);
+        }
+    }
+
+    $query.on('input', function () { search(300); });
+    $('#search').on('submit', function (event) {
+        event.preventDefault();
+        search(0);
+    });
+    $('#reset').on('click', function () {
+        $top.val('');
+        $bottom.val('');
+        search(0);
+    });
+    $('#alert .btn-close').on('click', showWelcome);
+    document.getElementById('carouselIndicators').addEventListener('slid.bs.carousel', updateLinks);
+
+    $('#archiveGrid').on('click', '.archive-delete', function (event) {
+        event.stopPropagation();
+        const $card = $(this).closest('.archive-card');
+        const entry = $card.data('entry');
+        archive = archive.filter(function (saved) { return saved !== entry; });
+        writeArchive();
+        $card.closest('.col').remove();
+    }).on('click', '.archive-card', function () {
+        cancelLookup();
+        cancelGeneration();
+        const entry = $(this).data('entry');
+        const share = httpUrl(entry.url);
+        const url = new URL(share);
+        const item = {
+            preview: archiveThumb(entry) || share,
+            image: httpUrl(entry.source || url.searchParams.get('alt')),
+            uuid: entry.uuid,
+            share: share,
+            download: httpUrl(entry.download),
+            alt: caption(entry)
+        };
+        $top.val(entry.toptext || '');
+        $bottom.val(entry.bottomtext || '');
+        $query.val(entry.query || '');
+        showSlides([item]);
+        showWelcome();
+        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('offcanvasArchive')).hide();
+        startLookup(item);
+    });
+    $('#clearArchive').on('click', function () {
+        archive = [];
+        writeArchive();
+        $('#archiveGrid').empty();
     });
 
-    $('#carouselIndicators').on('slid.bs.carousel', function () {
-        $('#id_image').val($('.carousel-inner > .active img').attr('data-src'));
-        updateSocialLinks();
-    })
+    archive.forEach(appendArchiveItem);
+    if ($query.val().trim()) {
+        search(0);
+    }
 </script>
 {% endblock %}
 
-{% load crispy_forms_tags %}
-
 {% block content %}
-<form id="search" method="post" data-validate-query-url="{% url 'autocompletemodel' %}">
-    {% csrf_token %}
+<form id="search" method="get" data-validate-query-url="{% url 'autocompletemodel' %}">
     <div id="div_id_query" class="form-group">
         <input type="text" name="query" maxlength="128" class="textinput textInput form-control form-control-lg"
-            id="id_query"
+            id="id_query" aria-label="DDB object URL"
             placeholder="https://www.deutsche-digitale-bibliothek.de/item/CRHMM44XWLG7ZNH55BQ5GSAHTYLXJ7Z4">
     </div>
 </form>
 <div id="alert" class="alert alert-dismissible alert-primary mt-3">
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    <div id="alert_message"><strong>Welcome!</strong> Please fill in the url of the object from <a
+    <button type="button" class="btn-close" aria-label="Dismiss message"></button>
+    <span id="alert_message" role="status"><strong>Welcome!</strong> Please fill in the URL of the object from <a
             href="https://www.deutsche-digitale-bibliothek.de/" class="alert-link" title="Deutsche Digitale Bibliothek"
-            target="_blank">DDB portal</a> you want to use for your meme, or see <a class="alert-link"
-            data-bs-toggle="offcanvas" href="#offcanvasArchive" role="button" aria-controls="offcanvasArchive">your
-            DDBmeme archive</a>!</div>
+            target="_blank" rel="noopener noreferrer">DDB portal</a> you want to use for your meme.</span>
+    <a class="alert-link" data-bs-toggle="offcanvas" href="#offcanvasArchive" role="button"
+        aria-controls="offcanvasArchive">Your DDBmeme archive</a>
 </div>
 <div class="collapse my-4" id="meme">
     <div class="row">
@@ -472,30 +404,29 @@
                 <!-- Spinner overlay shown while generating/loading -->
                 <div id="memeSpinner" class="d-none position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(255,255,255,0.6); z-index: 10;">
                     <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
-                    <span class="visually-hidden">Loading...</span>
+                    <span class="visually-hidden" role="status">Loading...</span>
                 </div>
             </div>
             <br>
             <div class="text-center">
-                <a href="#" id="saveBtn" class="socialBtn btn btn-primary" role="button" style="width:3.5em" download>
+                <a href="#" id="saveBtn" class="socialBtn btn btn-primary" role="button" style="width:3.5em" download aria-label="Download image">
                     <i class="fa-solid fa-cloud-arrow-down"></i>
                 </a>
-                <a href="#" id="linkBtn" class="socialBtn btn btn-primary" style="width:3.5em" data-bs-toggle="modal"
+                <a href="#" id="linkBtn" class="socialBtn btn btn-primary" style="width:3.5em" data-bs-toggle="modal" aria-label="Show meme link"
                     data-bs-target="#linkModal">
                     <i class="fa-solid fa-link"></i>
                 </a>
-                <a href="#" id="facebookBtn" class="socialBtn btn btn-primary" style="width:3.5em" target="_blank">
+                <a href="#" id="facebookBtn" class="socialBtn btn btn-primary" style="width:3.5em" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook">
                     <i class="fa-brands fa-facebook"></i>
                 </a>
-                <a href="#" id="twitterBtn" class="socialBtn btn btn-primary" style="width:3.5em" target="_blank">
+                <a href="#" id="twitterBtn" class="socialBtn btn btn-primary" style="width:3.5em" target="_blank" rel="noopener noreferrer" aria-label="Share on X">
                     <i class="fa-brands fa-x-twitter"></i>
                 </a>
             </div>
         </div>
         <div class="col-md-6">
             <hr class="d-block d-sm-block d-md-none d-lg-none d-xl-none">
-            <form id="make" method="post" data-validate-query-url="{% url 'maketextmodel' %}">
-                {% csrf_token %}
+            <form id="make" method="get" data-validate-query-url="{% url 'maketextmodel' %}">
                 <div id="div_id_toptext" class="form-group">
                     <label for="id_toptext" class="col-form-label ">Text top</label>
                     <input type="text" name="toptext" maxlength="128"
@@ -510,7 +441,7 @@
                 </div>
                 <input type="hidden" class="textinput textInput form-control" name="image" id="id_image">
                 <br>
-                <button id="generate" type="button" class="btn btn-primary btn-lg">Generate</button>
+                <button id="generate" type="submit" class="btn btn-primary btn-lg">Generate</button>
                 <button id="reset" type="button" class="btn btn-secondary btn-lg">Reset</button>
             </form>
         </div>
@@ -537,7 +468,7 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <input type="text" class="form-control" id="linkToMeme" placeholder="Link"
+                    <input type="text" class="form-control" id="linkToMeme" aria-label="Meme link" placeholder="Link"
                         onClick="this.setSelectionRange(0, this.value.length)" readonly>
                 </div>
             </div>

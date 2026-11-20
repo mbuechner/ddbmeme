@@ -1,5 +1,7 @@
 import os
 
+from django.core.management.utils import get_random_secret_key
+
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -7,16 +9,17 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/2.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'abcdefghijklmnopqrstuvwxyz1234567890')
+SECRET_KEY = os.environ.get('SECRET_KEY') or get_random_secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-def _env_bool(v):
-    return str(v).lower() in ('1', 'true', 'yes')
+def _env_bool(name, default='0'):
+    return os.environ.get(name, default).strip().lower() in ('1', 'true', 'yes')
 
-USE_X_FORWARDED_HOST = _env_bool(os.environ.get('USE_X_FORWARDED_HOST', '0'))
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = _env_bool('USE_X_FORWARDED_HOST')
+if USE_X_FORWARDED_HOST:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ALLOWED_HOSTS: read comma-separated env var and strip whitespace.
 # If ALLOW_ALL_HOSTS=1/true is set, allow all hosts (useful inside containers).
@@ -24,7 +27,7 @@ _allowed = os.environ.get('ALLOWED_HOSTS')
 if _allowed:
     ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
 else:
-    if _env_bool(os.environ.get('ALLOW_ALL_HOSTS', '0')):
+    if _env_bool('ALLOW_ALL_HOSTS'):
         ALLOWED_HOSTS = ['*']
     else:
         ALLOWED_HOSTS = ['localhost', '127.0.0.1']
@@ -38,16 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'crispy_forms',
     'ddbmeme',
-]
-
-
-STATICFILES_FINDERS = [
-    'django.contrib.staticfiles.finders.FileSystemFinder',
-    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-    # other finders..
-    'compressor.finders.CompressorFinder',
 ]
 
 MIDDLEWARE = [
@@ -115,10 +109,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/2.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-EN'
+LANGUAGE_CODE = 'en'
 TIME_ZONE = 'Europe/Berlin'
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
@@ -127,7 +120,6 @@ USE_TZ = True
 PROJECT_DIR = os.path.dirname(__file__)
 STATIC_ROOT = os.path.join(PROJECT_DIR, '../resources')
 STATIC_URL = '/resources/'
-CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 LOGGING = {
     'version': 1,
@@ -160,30 +152,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 # Memegen service configuration (can be overridden via env)
 MEMEGEN_BASE_URL = os.environ.get('MEMEGEN_BASE_URL', 'http://localhost:5001')
+
+
+def _env_int(name, default, minimum):
+    try:
+        return max(minimum, int(os.environ.get(name, default)))
+    except ValueError:
+        return default
+
+
 # Connect, Read timeouts in seconds as comma-separated env var, e.g. '5,20'
-_m_t = os.environ.get('MEMEGEN_TIMEOUT', '5,180')
 try:
-    _parsed = [int(x.strip()) for x in _m_t.split(',') if x.strip()]
-    if len(_parsed) >= 2:
-        MEMEGEN_TIMEOUT = (_parsed[0], _parsed[1])
-    elif len(_parsed) == 1:
-        MEMEGEN_TIMEOUT = (_parsed[0], _parsed[0])
-    else:
-        MEMEGEN_TIMEOUT = (5, 180)
-except Exception:
+    _timeouts = [int(value) for value in os.environ.get('MEMEGEN_TIMEOUT', '5,180').split(',')]
+    if len(_timeouts) not in (1, 2) or min(_timeouts) <= 0:
+        raise ValueError
+    MEMEGEN_TIMEOUT = (_timeouts[0], _timeouts[-1])
+except ValueError:
     MEMEGEN_TIMEOUT = (5, 180)
 
-try:
-    MEMEGEN_RETRY_TOTAL = max(0, int(os.environ.get('MEMEGEN_RETRY_TOTAL', '0')))
-except Exception:
-    MEMEGEN_RETRY_TOTAL = 0
-
-try:
-    MEMEGEN_MAX_CONCURRENCY = max(1, int(os.environ.get('MEMEGEN_MAX_CONCURRENCY', '2')))
-except Exception:
-    MEMEGEN_MAX_CONCURRENCY = 2
-
-try:
-    MEMEGEN_QUEUE_WAIT_SECONDS = max(0, int(os.environ.get('MEMEGEN_QUEUE_WAIT_SECONDS', '30')))
-except Exception:
-    MEMEGEN_QUEUE_WAIT_SECONDS = 30
+MEMEGEN_RETRY_TOTAL = _env_int('MEMEGEN_RETRY_TOTAL', 0, 0)
+MEMEGEN_MAX_CONCURRENCY = _env_int('MEMEGEN_MAX_CONCURRENCY', 2, 1)
+MEMEGEN_QUEUE_WAIT_SECONDS = _env_int('MEMEGEN_QUEUE_WAIT_SECONDS', 30, 0)

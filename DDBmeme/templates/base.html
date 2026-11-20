@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+<!doctype html>
 <html lang="en">
 
 <head>
@@ -7,14 +7,14 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="author" content="Michael Büchner">
     <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/fontawesome.min.css"
-        integrity="sha256-G5bovI+uHM2gCO6EwO9PFQcclSBYzTaxY6DXks3YxBU=" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/solid.min.css"
-        integrity="sha256-QpGGDEN+/o0itdG5kJTKGWmEeJOrtVqUabl6X/qgbRU=" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/brands.min.css"
-        integrity="sha256-S5t9he78QAfGGRoLbdaEdfTW1DazFBbjIZIlnKSy/Ck=" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootswatch/5.3.8/sketchy/bootstrap.min.css"
-        integrity="sha512-9J5riOEdrkkXD4buwNaan1ZtyL1maLA2fCyq+LTMtb+VHvkrcHpp351Wc8bN3KZUW/QHFoBwjmfT+dXmA3a9yg=="
+        href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/fontawesome.min.css"
+        integrity="sha384-m8DKa0MtZAZlyNgF18TSkQRYTPDY0sEELpwK2YijfYnVFH8kxiaO6hvopM168nue" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/solid.min.css"
+        integrity="sha384-p/nJzgOJxEnSeUkMQ0nk5oPsUT5x8eOWi6pxU2ls9qcO9B78dCvZk0JSAOXWXUQN" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/brands.min.css"
+        integrity="sha384-pIEnzgIAdkjnrjeHT4EuN7Kq2yGdMr3Vk0e3gLOkA7/e07sPVkOqclXo09iTJVEo" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.8/dist/sketchy/bootstrap.min.css"
+        integrity="sha384-JydQZovtaTxBDWypezbaeDcTZRTjToRV4VMLNx6PTVbViu5x+4DtMCJQmwpYrZCF"
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         /* Improve visibility of carousel controls and indicators under Sketchy */
@@ -86,7 +86,6 @@
         }
     </style>
     <title>{% block title %}DDBmeme{% endblock %}</title>
-    <base href="{{ request.build_absolute_uri }}">
 </head>
 
 <body>
@@ -94,19 +93,16 @@
         <div class="card p-5 my-4">
             <div class="card-body">
                 <h1 class="display-4"><a style="text-decoration: none;"
-                        href="{{ request.build_absolute_uri }}">DDBmeme</a></h1>
+                        href="{% url 'search_base' %}">DDBmeme</a></h1>
                 <p class="lead">A meme generator for Deutsche Digitale Bibliothek</p>
                 <hr class="my-4"> {% block content %} {% endblock %}
             </div>
         </div>
     </div>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js"
-        integrity="sha512-TPh2Oxlg1zp+kz3nFA0C5vVC6leG/6mm1z9+mA81MI5eaUVqasPLO8Cuk4gMF4gUfP5etR73rgU/8PNMsSesoQ=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/js/bootstrap.min.js"
-        integrity="sha512-nKXmKvJyiGQy343jatQlzDprflyB5c+tKCzGP3Uq67v+lmzfnZUi/ZT+fc6ITZfSC5HhaBKUIvr/nTLCV+7F+Q=="
+    <script src="https://cdn.jsdelivr.net/npm/jquery@4.1.0/dist/jquery.min.js"
+        integrity="sha384-UGSi5euAzE1p4sK41+yKs3vtdPcidmaW6fY2NUITZkjIPyMVUUYB/BV4A5Oa8uu2" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-WyOxWvTyr1QaMPfiPJSv76iReVthorl5uWlFtZPyK0IEB0hGzo9y5Bp9mYanr8Bu"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     {% block javascript %}{% endblock %}
 </body>

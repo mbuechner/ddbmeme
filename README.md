@@ -13,15 +13,14 @@ You can find suitable source images in the [DDB search results](https://www.deut
 ## Run with Docker
 DDBmeme is published as a container image at:
 
-https://github.com/mbuechner/ddbmeme/pkgs/container/ddbmeme%2Fddbmeme
+https://github.com/mbuechner/ddbmeme/pkgs/container/ddbmeme
 
 Run it locally with:
 ```
-docker run -d -p 8080:8080 -P \
-  --env "SECRET_KEY=myverysecretsecretkey" \
+docker run -d -p 127.0.0.1:8080:8080 \
   --env "USE_X_FORWARDED_HOST=0" \
   --env "ALLOWED_HOSTS=127.0.0.1,localhost" \
-ghcr.io/mbuechner/ddbmeme/ddbmeme:latest
+ghcr.io/mbuechner/ddbmeme:latest
 ```
 
 Open http://localhost:8080/ in your browser.
@@ -30,7 +29,7 @@ Open http://localhost:8080/ in your browser.
 | Variable             | Description                                                                                                                                                                    |
 |----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | SECRET_KEY           | Secret string for Django. Set this explicitly in every non-local deployment.                                                                                                    |
-| USE_X_FORWARDED_HOST | Set to `1` when DDBmeme runs behind a reverse proxy or OpenShift route.                                                                                                         |
+| USE_X_FORWARDED_HOST | Set to `1` behind a trusted reverse proxy or OpenShift Route that sets the forwarded host and protocol headers.                                                                |
 | ALLOWED_HOSTS        | Comma-separated list of allowed hosts such as `ddbmeme.example.org` or `localhost`.                                                                                             |
 | PATH_PREFIX          | Optional URL prefix such as `foo/bar/`. The UI is then available at `http://localhost:8080/foo/bar/`.                                                                          |
 | GUNICORN_WORKERS     | Optional number of Gunicorn worker processes for the Django app. Default: `1` (safer for single-container memory pressure).                                                     |
@@ -43,6 +42,7 @@ Open http://localhost:8080/ in your browser.
 | MEMEGEN_QUEUE_WAIT_SECONDS | Max wait time in seconds for a free memegen slot before returning `503`. Default: `30`.                                                                                   |
 | MEMEGEN_GUNICORN_TIMEOUT | Memegen gunicorn worker timeout in seconds. Default: `180`.                                                                                                                  |
 | MEMEGEN_WORKERS      | Number of memegen gunicorn workers. Default: `1`.                                                                                                                                |
+| MEMEGEN_PREWARM_ENABLED | Set to `0` to skip the sample image request during startup. Default: `1`.                                                                                                      |
 | MEMEGEN_MAX_REQUESTS | Restart memegen worker after this many requests to limit long-term memory growth. Default: `200`.                                                                               |
 | MEMEGEN_MAX_REQUESTS_JITTER | Random jitter for memegen worker recycling. Default: `30`.                                                                                                                |
 | WEB_CONCURRENCY      | Upstream memegen worker setting. In this deployment mapped to memegen gunicorn workers. Recommended upstream baseline: `2`; current robust default here: `1`.                  |
@@ -57,23 +57,15 @@ The container exposes a lightweight health endpoint at `http://localhost:8080/he
 It does not render templates and does not depend on external APIs, which makes it suitable for Kubernetes and OpenShift probes.
 
 ### OpenShift
-A sample OpenShift manifest is available at `openshift/ddbmeme.yaml`.
-It includes:
 
-- a `Secret` for `SECRET_KEY`
-- a `Deployment` with `startupProbe`, `readinessProbe`, and `livenessProbe` against `/healthz`
-- a `Service`
-- a TLS-terminated `Route`
+The sample in `openshift/ddbmeme.yaml` deploys an amd64 container, a Service, and a TLS-terminated Route. Its probes call `/healthz` with `Host: localhost`. Before applying it, provision a secret named `ddbmeme-secret` with a `SECRET_KEY` entry and set `ALLOWED_HOSTS` to `localhost` and your Route hostname.
 
-Apply it with:
 ```
 oc apply -f openshift/ddbmeme.yaml
 ```
 
 ### Runtime behavior
-The Django app is now served by Gunicorn instead of Django's development server.
-Supervisor retries both application processes before the container is treated as failed.
-This reduces unnecessary pod restarts for short-lived child process failures while still allowing OpenShift to restart the pod if a process reaches the `FATAL` state.
+Gunicorn serves Django. Supervisor monitors both Gunicorn processes, retries failures, and shuts down the container if a process reaches the `FATAL` state.
 
 When downstream image generation is slow, DDBmeme now applies controlled backpressure:
 
@@ -86,38 +78,48 @@ For this combined-container OpenShift setup with external background images, mor
 
 To avoid a first-request cold start, this setup uses a built-in zero-config startup sequence:
 
-- wait for memegen readiness on `http://127.0.0.1:5001/test`
-- send one internal prewarm request to `/images/fry/warmup/_.jpg`
-- start Django afterwards
+- wait for Memegen to answer `http://127.0.0.1:5001/test` within the bounded startup window
+- optionally send one internal prewarm request to `/images/fry/warmup/_.jpg`
+- start Django once Memegen is ready
 
 Startup logs include explicit `"[Startup] ..."` messages so readiness and prewarm behavior are visible in container logs.
 
 ### Container build
 1. Clone the repository: `git clone https://github.com/mbuechner/ddbmeme`
 2. Change into the project directory: `cd ddbmeme`
-3. Run `docker build -t ddbmeme .`
+3. Run `docker build --platform linux/amd64 -t ddbmeme .`
 4. Start the container:
 ```
-docker run -d -p 8080:8080 -P \
-  --env "SECRET_KEY=myverysecretsecretkey" \
+docker run -d -p 127.0.0.1:8080:8080 \
   --env "USE_X_FORWARDED_HOST=0" \
   --env "ALLOWED_HOSTS=127.0.0.1,localhost" \
 ddbmeme
 ```
 5. Open http://localhost:8080/ in your browser.
 
-### Docker stack example
+### Container releases
+
+Publish a stable GitHub Release from a `v`-prefixed tag such as `v1.4.8`. The tag must include the release trigger. It starts the Docker workflow on `master`, which builds the source and Dockerfile from the release tag for `linux/amd64`. Branch and pull request checks run separately in Python CI.
+
+The Docker workflow runs daily at 06:17 UTC. By default it maintains GitHub's latest stable release. Set the Actions repository variable `CONTAINER_RELEASE_TAG` to a published stable release tag to keep maintaining that version. A changed release commit, changed base image digest, or missing version tag triggers a build. Otherwise the workflow checks the existing digest. The rolling `python:3.13-alpine` base lets Python patch and Alpine updates reach the same container tags. Publish a new GitHub Release for changes to the app or its dependencies. Older releases use the Python base declared in their own Dockerfile.
+
+The workflow checks HTTP startup and scans the image and its CycloneDX SBOM when available. Fixable high or critical findings block promotion. Cosign signs the checked digest before the workflow updates the version tag. The maintained release also receives `latest` and `tagged` in the same run.
+
+To run the workflow manually, select `master` under **Actions → Docker → Run workflow** and enter a published `release_tag`. An empty input selects the maintained release. The default smoke check calls `/healthz` on port `8080` as `10001:0`. Manual inputs `http_path`, `http_port`, and `container_user` can override these for older releases. The repository variables `CONTAINER_HTTP_PATH`, `CONTAINER_HTTP_PORT`, `CONTAINER_USER`, `CONTAINER_HTTP_ATTEMPTS`, and `CONTAINER_SBOM_PATH` configure the defaults for all runs.
+
+Enable GitHub Actions and allow the repository to write to the GHCR package under **Package settings → Manage Actions access**. The workflow uses the built-in `GITHUB_TOKEN` for dispatch and registry access and GitHub OIDC for signing.
+
+### Docker Compose example
 ```
-version: '2'
 services:
   ddbmeme:
-    image: ghcr.io/mbuechner/ddbmeme/ddbmeme:latest
+    image: ghcr.io/mbuechner/ddbmeme:latest
     environment:
-      SECRET_KEY: myverysecretsecretkey
-      USE_X_FORWARDED_HOST: 0
+      SECRET_KEY: ${DDBMEME_SECRET_KEY:?Set DDBMEME_SECRET_KEY}
+      USE_X_FORWARDED_HOST: '0'
       ALLOWED_HOSTS: 127.0.0.1,localhost
     ports:
-      - "8080"
+      - "127.0.0.1:8080:8080"
     restart: always
 ```
 

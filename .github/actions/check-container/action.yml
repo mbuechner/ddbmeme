@@ -1,0 +1,182 @@
+name: Check HTTP container
+description: Probe HTTP startup and scan the image and its optional CycloneDX SBOM.
+
+inputs:
+  image:
+    description: Local image tag or immutable registry digest to run and scan.
+    required: true
+  platform:
+    description: Container platform to run and scan.
+    default: linux/amd64
+  container-port:
+    description: TCP port used by the HTTP server inside the container.
+    default: '8080'
+  http-path:
+    description: Loopback request path that should respond with HTTP 2xx or 3xx.
+    default: /healthz
+  http-attempts:
+    description: Maximum number of startup probe attempts (1 to 120).
+    default: '30'
+  container-user:
+    description: Optional Docker user or UID with an optional group. Defaults to the image user.
+    default: ''
+  container-env:
+    description: Optional container environment variables, one NAME=VALUE per line.
+    default: ''
+  cyclonedx-path:
+    description: Optional absolute path to a CycloneDX JSON SBOM in the image.
+    default: ''
+  scan-vulnerabilities:
+    description: Scan the image and any collected SBOM for vulnerabilities.
+    default: 'true'
+  block-on-fixable:
+    description: Fail on fixable High or Critical vulnerabilities.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Collect the optional SBOM and probe HTTP startup
+      id: smoke
+      env:
+        IMAGE: ${{ inputs.image }}
+        PLATFORM: ${{ inputs.platform }}
+        CONTAINER_PORT: ${{ inputs.container-port }}
+        HTTP_PATH: ${{ inputs.http-path }}
+        HTTP_ATTEMPTS: ${{ inputs.http-attempts }}
+        CONTAINER_USER: ${{ inputs.container-user }}
+        CONTAINER_ENV: ${{ inputs.container-env }}
+        CYCLONEDX_PATH: ${{ inputs.cyclonedx-path }}
+      shell: bash
+      run: |
+        if [[ ! "$CONTAINER_PORT" =~ ^[1-9][0-9]{0,4}$ ]] || (( CONTAINER_PORT > 65535 )); then
+          echo '::error::container-port must be an integer from 1 to 65535.'
+          exit 1
+        fi
+        if [[ ! "$HTTP_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] || (( HTTP_ATTEMPTS > 120 )); then
+          echo '::error::http-attempts must be an integer from 1 to 120.'
+          exit 1
+        fi
+        if [[ "$HTTP_PATH" != /* || ( -n "$CYCLONEDX_PATH" && "$CYCLONEDX_PATH" != /* ) ]]; then
+          echo '::error::http-path and any cyclonedx-path must start with /.'
+          exit 1
+        fi
+
+        args=(--platform "$PLATFORM" --publish "127.0.0.1::${CONTAINER_PORT}")
+        if [[ -n "$CONTAINER_USER" ]]; then
+          args+=(--user "$CONTAINER_USER")
+        fi
+        while IFS= read -r entry; do
+          if [[ -z "$entry" ]]; then
+            continue
+          fi
+          if [[ ! "$entry" =~ ^[a-zA-Z_][a-zA-Z_0-9]*= ]]; then
+            echo '::error::Each container-env entry must use NAME=VALUE.'
+            exit 1
+          fi
+          args+=(--env "$entry")
+        done <<< "$CONTAINER_ENV"
+
+        container="$(docker create "${args[@]}" -- "$IMAGE")"
+        cleanup() {
+          if [[ $? -ne 0 ]]; then
+            docker inspect --format '{{json .State}}' "$container" >&2 || true
+            docker logs "$container" >&2 || true
+          fi
+          docker rm -f "$container" >/dev/null || true
+        }
+        trap cleanup EXIT
+        echo 'image-available=true' >> "$GITHUB_OUTPUT"
+
+        if [[ -n "$CYCLONEDX_PATH" ]]; then
+          sbom_dir="$(mktemp -d "$RUNNER_TEMP/container-sbom.XXXXXX")"
+          sbom="$sbom_dir/sbom.json"
+          if copy_error="$(docker cp "$container:$CYCLONEDX_PATH" "$sbom" 2>&1)"; then
+            if [[ ! -f "$sbom" || -L "$sbom" ]] || ! jq -e '.bomFormat == "CycloneDX" and (.components | type == "array")' "$sbom" >/dev/null; then
+              echo '::error::Expected a CycloneDX JSON SBOM with a components array.'
+              exit 1
+            fi
+            echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
+          elif [[ "$copy_error" == *"Could not find the file "* ]]; then
+            echo 'The image has no SBOM at the configured path.'
+          else
+            printf '%s\n' "$copy_error" >&2
+            exit 1
+          fi
+        fi
+
+        docker start "$container" >/dev/null
+        address="$(docker port "$container" "${CONTAINER_PORT}/tcp")"
+        url="http://${address}${HTTP_PATH}"
+        for (( attempt = 1; attempt <= HTTP_ATTEMPTS; attempt++ )); do
+          if status="$(curl --silent --globoff --noproxy '*' --connect-timeout 1 --max-time 5 \
+              --output /dev/null --write-out '%{http_code}' "$url")" && [[ "$status" =~ ^[23][0-9]{2}$ ]]; then
+            echo "HTTP ${status} on startup probe ${attempt}."
+            break
+          fi
+          if (( attempt == HTTP_ATTEMPTS )); then
+            echo "::error::HTTP startup probe failed after $HTTP_ATTEMPTS attempts (last status ${status:-unavailable})."
+            exit 1
+          fi
+          sleep 2
+        done
+
+    - name: Scan image for known vulnerabilities
+      id: image-scan
+      if: ${{ !cancelled() && inputs.scan-vulnerabilities == 'true' && steps.smoke.outputs.image-available == 'true' }}
+      uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+      with:
+        image: docker:${{ inputs.image }}
+        grype-version: v0.122.1
+        output-format: json
+        fail-build: false
+        by-cve: true
+
+    - name: Scan dependencies from the image SBOM
+      id: sbom-scan
+      if: ${{ !cancelled() && inputs.scan-vulnerabilities == 'true' && steps.smoke.outputs.sbom != '' }}
+      uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+      with:
+        sbom: ${{ steps.smoke.outputs.sbom }}
+        grype-version: v0.122.1
+        output-format: json
+        fail-build: false
+        by-cve: true
+
+    - name: Summarize findings and apply release policy
+      if: >-
+        ${{ !cancelled() && steps.image-scan.outcome == 'success' &&
+        (steps.smoke.outputs.sbom == '' || steps.sbom-scan.outcome == 'success') }}
+      env:
+        IMAGE_SCAN: ${{ steps.image-scan.outputs.json }}
+        SBOM: ${{ steps.smoke.outputs.sbom }}
+        SBOM_SCAN: ${{ steps.sbom-scan.outputs.json }}
+        BLOCK_ON_FIXABLE: ${{ inputs.block-on-fixable }}
+      shell: bash
+      run: |
+        scans=("$IMAGE_SCAN")
+        if [[ -n "$SBOM" ]]; then
+          scans+=("$SBOM_SCAN")
+        fi
+        for result in "${scans[@]}"; do
+          [[ -s "$result" ]]
+          jq -e '.matches | type == "array"' "$result" >/dev/null
+        done
+        findings="$(jq --slurp '
+          [.[].matches[] | select(.vulnerability.severity == "High" or .vulnerability.severity == "Critical")]
+          | unique_by(.vulnerability.id, .artifact.type, .artifact.name, .artifact.version, .vulnerability.namespace, .vulnerability.fix.state)
+        ' "${scans[@]}")"
+        fixable="$(jq '[.[] | select(.vulnerability.fix.state == "fixed")] | length' <<< "$findings")"
+        {
+          echo '### High and Critical vulnerabilities'
+          echo
+          echo '| Advisory | Package | Installed | Type | Severity | Fixed versions |'
+          echo '| --- | --- | --- | --- | --- | --- |'
+          jq -r '.[] | "| \(.vulnerability.id) | \(.artifact.name) | \(.artifact.version) | \(.artifact.type) | \(.vulnerability.severity) | \((.vulnerability.fix.versions // []) | join(", ")) |"' <<< "$findings"
+          echo
+          echo "Fixable High and Critical findings: $fixable"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [[ "$BLOCK_ON_FIXABLE" == true ]] && (( fixable > 0 )); then
+          echo '::error::Fixable High or Critical vulnerabilities block promotion. See the job summary.'
+          exit 1
+        fi

@@ -1,90 +1,80 @@
-FROM python:3.13.14-alpine
-LABEL maintainer="Michael Büchner <m.buechner@dnb.de>"
-ARG MEMEGEN_GIT_HASH=285330c4aac902024f599e0faa44754481801991
-RUN apk add \
-		curl \
-		freetype-dev \
-		jpeg-dev \
-		openjpeg \
-		libimagequant \
-		libjpeg-turbo \
-		libxcb \
-		tiff \
-		supervisor && \
-	apk add --no-cache --virtual .build-deps  \
-		bluez-dev \
-		bzip2-dev \
-		coreutils \
-		fish \
-		dpkg-dev dpkg \
-		expat-dev \
-		findutils \
-		fribidi-dev \
-		g++ \
-		gcc \
-		git \
-		gdbm-dev \
-		harfbuzz-dev \
-		lcms2-dev \
-		libapparmor \
-		libc-dev \
-		libffi-dev \
-		libimagequant-dev \
-		libnsl-dev \
-		libpng-dev \
-		libtirpc-dev \
-		libwebp-dev \
-		libxcb-dev \
-		linux-headers \
-		make \
-		ncurses-dev \
-		openjpeg-dev \
-		openssl-dev \
-		pax-utils \
-		readline-dev \
-		sqlite-dev \
-		tcl-dev \
-		tiff-dev \
-		tk \
-		tk-dev \
-		util-linux-dev \
-		xz-dev \
-		zlib-dev && \
-	wget -O /home/memegen.zip https://github.com/jacebrowning/memegen/archive/$MEMEGEN_GIT_HASH.zip && \
-	unzip /home/memegen.zip -d /home && \
-	mv /home/memegen-$MEMEGEN_GIT_HASH/ /home/memegen/ && \
-	sed -i 's/Memegen.link/DDBmeme/g' /home/memegen/app/settings.py && \
-	rm -f /home/memegen.zip;
+FROM python:3.13-alpine AS runtime-base
+
+RUN apk add --no-cache \
+    curl \
+    freetype \
+    fribidi \
+    harfbuzz \
+    lcms2 \
+    libimagequant \
+    libjpeg-turbo \
+    libstdc++ \
+    libwebp-tools \
+    libxcb \
+    openjpeg \
+    tiff
+
+FROM runtime-base AS build
+
+ARG MEMEGEN_GIT_HASH=b38d4ad067308f467d8a981a9cd9a2277d388930
+ARG SOURCE_DATE_EPOCH
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true
+
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    freetype-dev \
+    fribidi-dev \
+    git \
+    harfbuzz-dev \
+    lcms2-dev \
+    libffi-dev \
+    libimagequant-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
+    libxcb-dev \
+    linux-headers \
+    openjpeg-dev \
+    tiff-dev \
+    zlib-dev \
+    && python -m pip install --no-cache-dir 'poetry==2.5.1' 'cyclonedx-bom==9.0.0'
 
 WORKDIR /home/memegen
+RUN curl --fail --location --retry 3 --output /tmp/memegen.tar.gz \
+        "https://github.com/jacebrowning/memegen/archive/${MEMEGEN_GIT_HASH}.tar.gz" \
+    && tar -xzf /tmp/memegen.tar.gz --strip-components=1 \
+    && sed -i 's/Memegen.link/DDBmeme/g' app/settings.py \
+    && poetry install --only main
 
-ENV POETRY_VIRTUALENVS_CREATE=true
-ENV POETRY_VIRTUALENVS_IN_PROJECT=true
-ENV RUN_USER=nobody
-# OpenShift runs containers with an arbitrary UID in group 0.
-ENV RUN_GROUP=0
-
-RUN chown -R ${RUN_USER}:${RUN_GROUP} . && \
-	python3 -m pip install --no-cache-dir poetry && \
-	poetry install --only=main;
-
-# add DDBmeme and build it
-COPY --chown=${RUN_USER}:${RUN_GROUP} DDBmeme/ /home/ddbmeme/
 WORKDIR /home/ddbmeme
-RUN python3 -m pip install --no-cache-dir -r requirements.txt && \
-	python3 manage.py migrate;
+COPY DDBmeme/requirements.txt ./
+RUN python -m venv /opt/ddbmeme-venv \
+    && /opt/ddbmeme-venv/bin/python -m pip install --no-cache-dir -r requirements.txt 'supervisor==4.3.0'
 
-# add supervisord config
-COPY --chown=${RUN_USER}:${RUN_GROUP} config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY DDBmeme/ ./
+RUN /opt/ddbmeme-venv/bin/python manage.py check \
+    && cyclonedx-py environment /opt/ddbmeme-venv --output-reproducible --spec-version 1.6 \
+        --output-file sbom.cdx.json
 
-RUN apk del --no-network .build-deps && \
-	touch /run/supervisord.pid && \
-	chown ${RUN_USER}:${RUN_GROUP} /run/supervisord.pid && \
-	chmod 664 /run/supervisord.pid && \
-	chgrp -R ${RUN_GROUP} /home/memegen /home/ddbmeme && \
-	chmod -R g=u /home/memegen /home/ddbmeme;
+FROM runtime-base
+LABEL maintainer="Michael Büchner <m.buechner@dnb.de>"
 
-# Run supervisord as nobody
-USER ${RUN_USER}
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENV PATH="/opt/ddbmeme-venv/bin:${PATH}" \
+    HOME=/tmp \
+    TMPDIR=/tmp \
+    PYTHONDONTWRITEBYTECODE=1
+COPY --from=build /home/memegen /home/memegen
+COPY --from=build /home/ddbmeme /home/ddbmeme
+COPY --from=build /opt/ddbmeme-venv /opt/ddbmeme-venv
+COPY config/supervisord.conf config/ddbmeme-start.sh config/exit-on-fatal.py /etc/supervisor/
+
+# Memegen writes generated files and its template cache as the OpenShift UID.
+RUN mkdir -p /home/memegen/images \
+    && chmod -R g=u /home/memegen/images /home/memegen/templates
+
+WORKDIR /home/ddbmeme
+USER 65534:0
 EXPOSE 8080
+CMD ["/opt/ddbmeme-venv/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

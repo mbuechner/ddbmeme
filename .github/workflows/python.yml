@@ -1,0 +1,57 @@
+name: Python CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  django:
+    name: Django checks on Python 3.13
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: DDBmeme/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r DDBmeme/requirements.txt
+          python -m pip check
+      - name: Check Django and run tests
+        working-directory: DDBmeme
+        run: |
+          python manage.py check
+          python manage.py test
+
+  container:
+    name: Validate container build
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build Linux amd64 container
+        run: docker buildx build --pull --platform linux/amd64 --load --tag ddbmeme:ci .
+      - name: Probe container startup with an OpenShift-style user
+        uses: ./.github/actions/check-container
+        with:
+          image: ddbmeme:ci
+          container-user: '10001:0'
+          container-env: |
+            SECRET_KEY=ddbmeme-ci-health-check
+            ALLOWED_HOSTS=127.0.0.1,localhost
+            USE_X_FORWARDED_HOST=0
+            MEMEGEN_PREWARM_ENABLED=0
+          scan-vulnerabilities: 'false'
