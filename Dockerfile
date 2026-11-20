@@ -1,6 +1,6 @@
 FROM python:3.13-alpine AS runtime-base
 
-RUN apk add --no-cache \
+RUN apk upgrade --no-cache && apk add --no-cache \
     curl \
     freetype \
     fribidi \
